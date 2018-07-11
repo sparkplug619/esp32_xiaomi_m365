@@ -2,6 +2,11 @@ M365 ninebot app Lock/Unlock
 
 not decoded so far...
 
+//From my understanding so far, the following commands are send by the BLE to the ESC with the command to either lock or unlock.
+// lock = {0x55, 0xAA, 0x4, 0x20, 0x3, 0x70, 0x1, 0x0, 0x67, 0xFF};
+// unlock = {0x55, 0xAA, 0x4, 0x20, 0x3, 0x71, 0x1, 0x0, 0x66, 0xFF};
+
+
 X1 : 55 AA 06 21 64 00 02 07 00 00 6B FF [CRCCalc:FF6B]
 BLE: 55 AA 07 20 65 00 04 28 27 00 00 20 FF [CRCCalc:FF20]
 BLE: 55 AA 06 20 61 23 06 02 28 27 FE FE [CRCCalc:FEFE]
@@ -432,3 +437,4 @@ BLE: 55 AA 06 20 61 3A 04 02 28 27 E9 FE [CRCCalc:FEE9]
 ESC: 55 AA 06 23 01 3A 58 00 02 00 41 FF [CRCCalc:FF41]
 BLE: 55 AA 09 20 64 00 06 28 27 00 00 72 00 AB FE [CRCCalc:FEAB]
 X1 : 55 AA 06 21 64 00 02 07 00 00 6B FF [CRCCalc:FF6B]
+
