@@ -1,6 +1,6 @@
 # esp32_xiaomi_m365
 Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressif ESP32 / ESP8266:
-- Cheap 128x64 pix OLED SSD1306 based
+- Supports one or two 0.96" 128x64 SSD1306 based OLED screen(s) (SSD1351/128x128 Color OLED support to follow)
 - ESP32/Arduino Code
 - ESP8266/Arduino works as well, right now no ESP32-specific features are used (might come later)
 - OTA for Firmwareupdates
@@ -40,9 +40,10 @@ Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressi
    - Check Scooter Error Register
    - Firmware-Flash Protection
    - Alert User if Cell-Voltages difference is above a treshold
- - custom PCB with 2 OLEDs, ESP32S, VReg and touch areas
- - add sleeptimer - x seconds after last event (gas/brake/throttle/speed/chargerun-plug/telnet/AP-Client Connection) - stop sending  requests, so scooter can timeout/turn itself off
+ - custom PCB with 2 OLEDs, ESP32S, VReg --> in production
+ - add display-sleeptimer - x seconds after last event (gas/brake/throttle/speed/chargerun-plug/telnet/AP-Client Connection & speed = 0)
  - advanced thief/lock protection
+ - fix speed for int16 overflow in m/h -> faster than 31.7 -> overflow
 
 # further Ideas & Visions:
  - add Scooter-Flashing Protection (so no one can flash broken firmware to your scooter while waiting at a red traffic light
@@ -60,7 +61,6 @@ use the letters
  - s,t,e,b,n,x,E,B,N,X to switch between the screens
  - r to reset statistics & m365 data arrays
 
-
 # Wiring
 M365 has a Serial One Wire Bus between BLE Module and ESC which consists of 4 wires, the connection as seen on the BLE Module:
 - Ground  (Black, "G")
@@ -71,6 +71,6 @@ M365 has a Serial One Wire Bus between BLE Module and ESC which consists of 4 wi
 ESP32/8266 needs a Vcc of 3.3V, while at the same time the GPIO Pins are 5V save, so you can wire the 5V to a Vreg for 3.3v which feed the ESP, while the Serial Connection can be wired to RX/TX Pins.
 It might be a idea to use e.g. 680R or 1k in series to protect the gpio, as well as add a diode from rx in series with a ~100-200R towards TX
 
-# Hints
-As there's some hicups with the standard arduino libraries (and the adafruit ssd1306 oled lib) and their implementation on the esp32, some changes need to be made to the source of arduino-esp32 core and adafruit-ssd1306 library -> see comments in the source.
-
+# possible Issues and Hints
+ - Adafruit_SSD1306 uses 100kHz I2C Clock per default and does not support individual GPIO Pins for Clock and Data. forked & fixed version: https://github.com/smartinick/Adafruit_SSD1306
+ - arduino-esp32 core implementation of HardwareSerial and esp32-hal-uart only trigger a uart-rx event/interrupt every 112 bytes which makes it impossible to stay within the timing necersarry for the m365 one-wire-uart. forked & fixed version: https://github.com/smartinick/arduino-esp32
