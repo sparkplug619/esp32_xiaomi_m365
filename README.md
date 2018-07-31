@@ -31,6 +31,8 @@ Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressi
 - Telnet on Port 36525 with packet decode/dump from M365 Bus ("read only")
 - compiles on ESP8266, UART/Statemachines/OLED untestet on this plattform
 - verified function on ESP8266
+- finished screen formating for 1 & 2 .96" displays
+- fixed data-requestor after startup
 
 # Todos
  - fix - data-requestor timing currently causes ~10% crc errors on m365 bus

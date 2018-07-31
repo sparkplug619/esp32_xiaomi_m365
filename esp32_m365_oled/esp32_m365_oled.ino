@@ -21,49 +21,80 @@
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.07.26"
-
-//functional modules
-  #define useoled1 //comment out to disable oled functionality
-  #define useoled2
-  //#define usewlanclientmode //NOT IMPLEMENTED comment out to disable Wifi Client functionality
-  //#define usewlanapmode //NOT IMPLEMENTED  comment out to disable Wifi Access Poiint functionality
-  #define usetelnetserver //comment out to disable telnet status/telemetrie server, this also disables RAW Server (so only mqtt might be left for leaving wifi activated)
-  //#define userawserver //comment out to disable RAW Serial Data BUS Stream on Port 36524, NOT VERIFIED against wired-data-stream
-  #define usepacketserver //comment out to disable PACKET Decode on Port 36525
-  //#define usemqtt //NOT IMPLEMENTED comment out to disable mqtt functionality
-  #define usestatusled //if enabled update "#define led" with gpionum; 10% dutycycle while searching for known wlans, 50% dutycycle while in wlan client/accesspoint mode, ON if client connected, off if wlan is turned off
+#define swversion "18.07.29"
 
 //scooter config
   //#define batt12s //shows 12 cells on battery/charge screens
-  //10" wheel speed/distance faktor
-//DEBUG Settings
-  //#define debug_dump_states //dump state machines state
-  //#define debug_dump_rawpackets //dump raw packets to Serial/Telnet
-  //#define debug_dump_packetdecode //dump infos from packet decoder
+  //#define 10inch //NOT IMPLEMENTED -> apply 8,5" -> 10" wheel speed/distance factor = 10/8,5=1,1764705882352941176470588235294
 
-//Config Settings (should be adopted to personal desires)
+//Hardwareconfig
+  #define useoled1 //comment out to disable oled functionality
+  #define useoled2
+  #define usei2c //if not defined, spi will be used - SPI NOT IMPLEMENTED YET
 
-  #ifdef usemqtt
-    #include <PubSubClient.h>
-    #define mqtt_clientID "m365"
-    #define mqtt_server "192.168.0.31"
-    #define mqtt_port 1883
+
+  //#define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
+
+  #ifdef developermode
+    //detailed config
+      //#define usewlanclientmode //NOT IMPLEMENTED comment out to disable Wifi Client functionality
+      //#define usewlanapmode //NOT IMPLEMENTED  comment out to disable Wifi Access Poiint functionality
+      #define usetelnetserver //comment out to disable telnet status/telemetrie server, this also disables RAW Server (so only mqtt might be left for leaving wifi activated)
+      //#define userawserver //comment out to disable RAW Serial Data BUS Stream on Port 36524, NOT VERIFIED against wired-data-stream
+      #define usepacketserver //comment out to disable PACKET Decode on Port 36525
+      //#define usemqtt //NOT IMPLEMENTED comment out to disable mqtt functionality
+      #define usestatusled //if enabled update "#define led" with gpionum; 10% dutycycle while searching for known wlans, 50% dutycycle while in wlan client/accesspoint mode, ON if client connected, off if wlan is turned off
+    //DEBUG Settings
+      //#define debug_dump_states //dump state machines state
+      //#define debug_dump_rawpackets //dump raw packets to Serial/Telnet
+      //#define debug_dump_packetdecode //dump infos from packet decoder
   #endif
+  
 
-  #define OTApwd "h5fj8ovbthrfd65b4"
+//Configuration Settings (should be adopted to personal desires)
+
+  //Wifi - CHANGE IT TO YOUR OWN SETTINGS!!!
+    #define maxssids 1
+    #define ssid1 "m365dev"
+    #define password1 "h5fj8bvothrfd65b4"
+    #define ssid2 "..."
+    #define password2 "..."
+    #define ssid3 "..."
+    #define password3 "..."
+
+  //SSID/Pass for Access-Point Mode - CHANGE IT TO YOUR OWN SEQUENCE!!!
+    const char *apssid ="m365oled";
+    const char *appassword="365";
+  
+  //#define staticip //use static IP in Client Mode, Comment out for DHCP
+    #ifdef staticip //static IP for Client Mode, in AP Mode default is 192.168.4.1/24
+      IPAddress ip(192,168,0,149);
+      IPAddress gateway(192,168,0,1);
+      IPAddress dns(192,168,0,1);
+      IPAddress subnet(255,255,255,0);
+    #endif
+
+  //MQTT - NOT USED YET
+    #ifdef usemqtt
+      #include <PubSubClient.h>
+      #define mqtt_clientID "m365"
+      #define mqtt_server "192.168.0.31"
+      #define mqtt_port 1883
+    #endif
+
+  //Over The Air Firmwareupdates - password - CHANGE IT TO YOUR OWN SEQUENCE!!!
+    #define OTApwd "h5fj8ovbthrfd65b4"
+
+
+
+//usually nothing must/should be changed below
 
 //OLED
 #ifdef useoled1
+  #ifdef usei2c
     #ifdef ESP32
       #define oled_scl GPIO_NUM_4 //working wemos fake board
       #define oled_sda GPIO_NUM_16 //working wemos fake board
-    //#define sclpin GPIO_NUM_15 //working ttgo board
-    //#define sdapin GPIO_NUM_4  //working ttgo board
-    //#define sclpin GPIO_NUM_4 //working ttgo board
-    //#define sdapin GPIO_NUM_0  //working ttgo board
-    //#define sclpin GPIO_NUM_23 //working ttgo board
-    //#define sdapin GPIO_NUM_5  //working ttgo board
     #endif
     #ifdef ESP8266
       #define oled_scl 4
@@ -71,13 +102,20 @@
     #endif
     #define oled_reset -1
     #define oled1_address 0x3C
+  #else
+    //SPI
+  #endif
 #endif
 
 #if defined useoled2
+  #ifdef usei2c
     #define oled2_address 0x3D
-    #ifndef useoled1
-      #error "useoled2 defined, but useoled1 not defined"
-    #endif
+  #else
+    //SPI
+  #endif
+  #ifndef useoled1
+    #error "useoled2 defined, but useoled1 not defined"
+  #endif
 #endif
 
 #if (defined useoled1 && !defined useoled2)
@@ -161,24 +199,6 @@
 #endif
 
 //WLAN
-  #define maxssids 1
-  #define ssid1 "m365dev"
-  #define password1 "h5fj8bvothrfd65b4"
-  #define ssid2 "..."
-  #define password2 "..."
-  #define ssid3 "..."
-  #define password3 "..."
-
-  const char *apssid ="m365oled";
-  const char *appassword="365";
-  //#define staticip //use static IP in Client Mode, Comment out for DHCP
-  #ifdef staticip //static IP for Client Mode, in AP Mode default is 192.168.4.1/24
-    IPAddress ip(192,168,0,149);
-    IPAddress gateway(192,168,0,1);
-    IPAddress dns(192,168,0,1);
-    IPAddress subnet(255,255,255,0);
-  #endif
-  
   uint8_t currentssidindex = 0;
   uint8_t apnumclientsconnected=0;
   uint8_t apnumclientsconnectedlast=0;
@@ -353,9 +373,9 @@
   int16_t current_max = 0;
   int32_t watt_min = 0;
   int32_t watt_max = 0;
-  uint8_t tb1_min = 100; //temperature batt 1 min
+  uint8_t tb1_min = 255; //temperature batt 1 min
   uint8_t tb1_max = 0; //temperature batt 1 max
-  uint8_t tb2_min = 100;  //temperature batt 2 min
+  uint8_t tb2_min = 255;  //temperature batt 2 min
   uint8_t tb2_max = 0;  //temperature batt 2 max
   uint16_t te_min = 1000;  //temperature esc min
   uint16_t te_max = 0;  //temperature esc max
@@ -534,7 +554,7 @@
       rq_esc_essentials|rq_bms_essentials|rq_bms_cells //charging
     };
 
-  uint8_t subscribedrequests = rq_esc_essentials|rq_bms_essentials;
+  uint8_t subscribedrequests =  rqsarray[0];
 
 //Screen Switching
   uint8_t oledstate = 0;
@@ -616,15 +636,16 @@ void reset_statistics() {
   current_max = 0;
   watt_min = 0;
   watt_max = 0;
-  tb1_min = 100;
+  tb1_min = 255;
   tb1_max = 0;
-  tb2_min = 100;
+  tb2_min = 255;
   tb2_max = 0;
   te_min = 1000;
   te_max = 0;
 } //reset_statistics
 
 void start_m365() {
+  subscribedrequests=rqsarray[0];
   M365SerialFull
   m365receiverstate = m365receiverready;
   m365packetstate=m365packetidle;
@@ -641,11 +662,11 @@ void m365_updatestats() {
     if (watt_min>currentwatt) { watt_min = currentwatt; }
     if (watt_max<currentwatt) { watt_max = currentwatt; }
   //Temperatures
-    if (tb1_min>bmsparsed->temperature[0]) { tb1_min = bmsparsed->temperature[0]; }
+    if (tb1_min>bmsparsed->temperature[0] | tb1_min==0) { tb1_min = bmsparsed->temperature[0]; }
     if (tb1_max<bmsparsed->temperature[0]) { tb1_max = bmsparsed->temperature[0]; }
-    if (tb1_min>bmsparsed->temperature[2]) { tb1_min = bmsparsed->temperature[2]; }
-    if (tb1_max<bmsparsed->temperature[2]) { tb1_max = bmsparsed->temperature[2]; }
-    if (te_min>escparsed->frametemp2) { te_min = escparsed->frametemp2; }
+    if (tb2_min>bmsparsed->temperature[1] | tb2_min==0) { tb2_min = bmsparsed->temperature[1]; }
+    if (tb2_max<bmsparsed->temperature[1]) { tb2_max = bmsparsed->temperature[1]; }
+    if (te_min>escparsed->frametemp2 | te_min==0) { te_min = escparsed->frametemp2; }
     if (te_max<escparsed->frametemp2) { te_max = escparsed->frametemp2; }
   //Cell Voltages
     highest = 0;
@@ -1527,7 +1548,11 @@ void oled_startscreen() {
 
 void setup() {
 #ifdef useoled1
-  display1.begin(SSD1306_SWITCHCAPVCC, oled1_address, false, oled_sda, oled_scl);
+  #ifdef usei2c
+    display1.begin(SSD1306_SWITCHCAPVCC, oled1_address, false, oled_sda, oled_scl);
+  #else
+    //SPI
+  #endif
   //display1.setRotation(2);
   display1.setTextColor(WHITE);
   display1.setFont();
@@ -1537,7 +1562,11 @@ void setup() {
   display1.display();
 #endif
 #ifdef useoled2
-  display2.begin(SSD1306_SWITCHCAPVCC, oled2_address, false,oled_sda, oled_scl);
+  #ifdef usei2c
+    display2.begin(SSD1306_SWITCHCAPVCC, oled2_address, false,oled_sda, oled_scl);
+  #else
+    //SPI
+  #endif
   display1.setRotation(0);
   display2.setTextColor(WHITE);
   display2.setFont();
@@ -1556,8 +1585,10 @@ void setup() {
   display2.clearDisplay();
   display2.display();
 #endif
-  pinMode(led,OUTPUT);
-  digitalWrite(led,LOW);
+  #ifdef usestatusled
+    pinMode(led,OUTPUT);
+    digitalWrite(led,LOW);
+  #endif
   #ifdef ESP32
     DebugSerial.begin(115200);
   #endif
@@ -1675,7 +1706,7 @@ void setup() {
     #endif    
   });
   ArduinoOTA.setPassword(OTApwd);
-  sprintf(tmp2, "es-m36-%s",mac);
+  sprintf(tmp2, "es-m365-%s",mac);
   ArduinoOTA.setHostname(tmp2);
 } //setup
 
@@ -1883,27 +1914,32 @@ void oled_switchscreens() {
               break;
             #if !defined useoled2
               case 1: //Single Screen  Temperatures - Frame temp 1 & 2, Batt Temp 1 & 2
+//FIX THIS SCREEN -> UNITS & Alignment
                   display1.printf("TEMPERATURE     (%d/%d)",stopsubscreen,stopsubscreens);
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset); display1.print("Batt1:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset); display1.printf("%3d.0",bmsparsed->temperature[0]-20);
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*2+linespace+1); display1.print("Batt2:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset*2+linespace+1); display1.printf("%3d.0",bmsparsed->temperature[1]-20);
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*3+(linespace+1)*2); display1.print("Frame:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset*3+(linespace+1)*2); display1.printf("%4.1f",(float)escparsed->frametemp2/10.0f);
-                  //display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*4+linespace*3); display1.print("Frame:");
-                  //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset*4+linespace*3); display1.printf("%.1f°C",(float)escparsed->frametemp2/10.0f);
+                line = dataoffset+baselineoffset;
+                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Batt1:");
+                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)bmsparsed->temperature[0]-20.0f);  
+                  display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
+                line = dataoffset+baselineoffset*2+linespace;
+                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Batt2:");
+                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)bmsparsed->temperature[1]-20.0f);  
+                  display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
+                line = dataoffset+baselineoffset*3+linespace*2;
+                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("ESC:");
+                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)escparsed->frametemp2/10.0f);
+                  display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
                 break;
               case 2: //Single Screen: Min/Max Values
             #else
               case 1: //Dual Screen: Min/Max Values
             #endif
                 display1.printf("TRIP Min/Max    (%d/%d)\r\n\r\n",stopsubscreen,stopsubscreens);
-                display1.printf("Speed: %04.1f/%04.1f\r\n",(float)speed_min/1000.0f,(float)speed_max/1000.0f);
-                display1.printf("Current: %4.1f/%4.1fA\r\n",(float)current_min/100.0f,(float)current_max/100.0f);
-                display1.printf("Watt: %4d/%4d\r\n",watt_min,watt_max);
-                display1.printf("BattTmp1: %3d/%3d°C\r\n",tb1_min-20,tb1_max-20);
-                display1.printf("BattTmp2: %3d/%3d°C\r\n",tb2_min-20,tb2_max-20);
-                display1.printf("ESC Temp: %4.1f/%4.1f°C\r\n",(float)te_min/10.0f,(float)te_max/10.0f);
+                display1.printf("Speed : %5.1f %5.1f\r\n",(float)speed_min/1000.0f,(float)speed_max/1000.0f);
+                display1.printf("Ampere: %5.1f %5.1f A\r\n",(float)current_min/100.0f,(float)current_max/100.0f);
+                display1.printf("Watt  : %5d %5d W\r\n",watt_min,watt_max);
+                display1.printf("BattT1: %3d.0 %3d.0 C\r\n",tb1_min-20,tb1_max-20); display1.drawCircle(117,42,1,WHITE);
+                display1.printf("BattT2: %3d.0 %3d.0 C\r\n",tb2_min-20,tb2_max-20); display1.drawCircle(117,50,1,WHITE);
+                display1.printf("ESC T : %5.1f %5.1f C\r\n",(float)te_min/10.0f,(float)te_max/10.0f); display1.drawCircle(117,58,1,WHITE);
               break;
             #if !defined useoled2
               case 3: //Single Screen Batt Info 1: Total Capacity, Remaining, Voltage, Percent
@@ -1914,32 +1950,41 @@ void oled_switchscreens() {
             #endif
                 line = dataoffset+baselineoffset;
                   display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Volt:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%5.2fV",(float)bmsparsed->voltage/100.0f);
-                  line = dataoffset+baselineoffset*2+linespace;
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("%:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%3d%%",bmsparsed->remainingpercent);
+                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%5.2f",(float)bmsparsed->voltage/100.0f);
+                  display1.setCursor(119,line); display1.setFont(); display1.print("V");
+                line = dataoffset+baselineoffset*2+linespace;
+                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Percent:");
+                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d%",bmsparsed->remainingpercent);
+                  display1.setCursor(119,line); display1.setFont(); display1.print("%");
                 line = dataoffset+baselineoffset*3+linespace*2;
                   display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Cycles:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%5d",bmsparsed->cycles);
+                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->cycles);
+                  display1.setCursor(119,line); display1.setFont(); display1.print("#");
                 line = dataoffset+baselineoffset*4+linespace*3;
                   display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Charges:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%5d",bmsparsed->chargingtimes);
+                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->chargingtimes);
+                  display1.setCursor(119,line); display1.setFont(); display1.print("#");
               break;
             #if !defined useoled2  
               case 4: //Single Screen Batt Info 2: Health/Cycles/Charge Num/Prod Date
                   display1.printf("BATTERY 2       (%d/%d)",stopsubscreen,stopsubscreens);
                   line = dataoffset+baselineoffset;
                     display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Health:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%02d",bmsparsed->health);
+                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->health);
+                    display1.setCursor(119,line); display1.setFont(); display1.print("%");
                   line = dataoffset+baselineoffset*2+linespace;
                     display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Cap:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%05d",bmsparsed->remainingcapacity);
+                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(56,line); display1.printf("%5d",bmsparsed->remainingcapacity);
+                    display1.setCursor(108,line); display1.setFont(); display1.print("mAh");
                   line = dataoffset+baselineoffset*3+linespace*2;
                     display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Total:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%05d",bmsparsed->totalcapacity);
+                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(56,line); display1.printf("%5d",bmsparsed->totalcapacity);
+                    display1.setCursor(108,line); display1.setFont(); display1.print("mAh");
                   line = dataoffset+baselineoffset*4+linespace*3;
-                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("T1/T2:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%02d / %02d C",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
+                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Temp:");
+                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%02d/%02d",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
+                    display1.setCursor(119,line); display1.setFont(); display1.print("C");
+                    display1.drawCircle(115,line-5,1,WHITE);
                    break;
               case 5: //Single Screen Cell Voltages
             #else
@@ -2264,37 +2309,44 @@ void oled_switchscreens() {
               break;
             case 1:
                 display2.printf("FIX THIS SCREEN (%d/%d)\r\n\r\n",stopsubscreen,stopsubscreens);
+                /*
                 display2.printf("Speed: %04.1f/%04.1f\r\n",(float)speed_min/1000.0f,(float)speed_max/1000.0f);
                 display2.printf("Current: %4.1f/%4.1fA\r\n",(float)current_min/100.0f,(float)current_max/100.0f);
                 display2.printf("Watt: %4d/%4d\r\n",watt_min,watt_max);
                 display2.printf("BattTmp1: %3d/%3d°C\r\n",tb1_min-20,tb1_max-20);
                 display2.printf("BattTmp2: %3d/%3d°C\r\n",tb2_min-20,tb2_max-20);
                 display2.printf("ESC Temp: %4.1f/%4.1f°C\r\n",(float)te_min/10.0f,(float)te_max/10.0f);
+                */
               break;
             case 2:
                   line = baselineoffset;
                     display2.setFont(&FreeSans9pt7b); display2.setCursor(0,line); display2.print("Health:");
-                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(64,line); display2.printf("%02d",bmsparsed->health);
+                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(64,line); display2.printf("%4d",bmsparsed->health);
+                    display2.setCursor(119,line); display2.setFont(); display2.print("%");
                   line = baselineoffset*2+linespace;
                     display2.setFont(&FreeSans9pt7b); display2.setCursor(0,line); display2.print("Cap:");
-                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(64,line); display2.printf("%05d",bmsparsed->remainingcapacity);
+                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(56,line); display2.printf("%5d",bmsparsed->remainingcapacity);
+                    display2.setCursor(108,line); display2.setFont(); display2.print("mAh");
                   line = baselineoffset*3+linespace*2;
                     display2.setFont(&FreeSans9pt7b); display2.setCursor(0,line); display2.print("Total:");
-                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(64,line); display2.printf("%05d",bmsparsed->totalcapacity);
+                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(56,line); display2.printf("%5d",bmsparsed->totalcapacity);
+                    display2.setCursor(108,line); display2.setFont(); display2.print("mAh");
                   line = baselineoffset*4+linespace*3;
                     display2.setFont(&FreeSans9pt7b); display2.setCursor(0,line); display2.print("Temp:");
-                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(64,line); display2.printf("%2d / %2d C",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
+                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(64,line); display2.printf("%02d/%02d",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
+                    display2.setCursor(119,line); display2.setFont(); display2.print("C");
+                    display2.drawCircle(115,line-5,1,WHITE);
               break;
             case 3:
                 display2.setFont(&FreeSans9pt7b); 
                 display2.setCursor(0,12);
                 display2.printf("9:%5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f);
                 display2.printf("X:%5.3f",(float)bmsparsed->Cell10Voltage/1000.0f);
-                //#ifdef batt12s
+                #ifdef batt12s
                   display2.setCursor(0,12+14);
                   display2.printf("1:%5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f);
                   display2.printf("2:%5.3f",(float)bmsparsed->Cell12Voltage/1000.0f);
-                //#endif
+                #endif
                 display2.setCursor(0,12+14+14);
                 display2.printf("L:%5.3f H:%5.3f", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
                 display2.setCursor(0,12+14+14+14);
@@ -2445,7 +2497,9 @@ void loop() {
     handle_oled();
   #endif
   ArduinoOTA.handle();
-  handle_led();
+  #ifdef usestatusled
+    handle_led();
+  #endif
   #ifdef usemqtt
     client.loop();
   #endif
