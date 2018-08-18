@@ -73,6 +73,10 @@ M365 has a Serial One Wire Bus between BLE Module and ESC which consists of 4 wi
 ESP32/8266 needs a Vcc of 3.3V, while at the same time the GPIO Pins are 5V save, so you can wire the 5V to a Vreg for 3.3v which feed the ESP, while the Serial Connection can be wired to RX/TX Pins.
 It might be a idea to use e.g. 680R or 1k in series to protect the gpio, as well as add a diode from rx in series with a ~100-200R towards TX
 
+# PCB Bugs v180723
+ - 1nF C from EN towards GND and 18k R from EN towards 3.3V are missing
+ - the SOT23 Diode housing might be wrong - depending on your Diode (BAS70xx versions) -> the Diode-Package can be rotated 120° CCW to fix that
+
 # possible Issues and Hints
  - Adafruit_SSD1306 uses 100kHz I2C Clock per default and does not support individual GPIO Pins for Clock and Data. forked & fixed version: https://github.com/smartinick/Adafruit_SSD1306
  - arduino-esp32 core implementation of HardwareSerial and esp32-hal-uart only trigger a uart-rx event/interrupt every 112 bytes which makes it impossible to stay within the timing necersarry for the m365 one-wire-uart. forked & fixed version: https://github.com/smartinick/arduino-esp32

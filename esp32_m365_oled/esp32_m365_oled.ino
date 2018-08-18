@@ -9,7 +9,10 @@
   #include <WiFi.h>
   #include <WiFiUdp.h>
   #include <Update.h> //needed for arduinoOTA on esp32
+  #include <Preferences.h>
+  
 #elif defined(ESP8266)
+  #warning "Preferences not supported on ESP8266"
   #include <ESP8266WiFi.h>
   #include <WiFiUdp.h>
   WiFiEventHandler stationConnectedHandler;
@@ -21,7 +24,7 @@
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.07.29"
+#define swversion "18.08.18"
 
 //scooter config
   //#define batt12s //shows 12 cells on battery/charge screens
@@ -29,8 +32,8 @@
 
 //Hardwareconfig
   #define useoled1 //comment out to disable oled functionality
-  #define useoled2
-  #define usei2c //if not defined, spi will be used - SPI NOT IMPLEMENTED YET
+  //#define useoled2
+  //#define usei2c //if not defined, spi will be used - SPI NOT IMPLEMENTED YET
 
 
   //#define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
@@ -43,11 +46,11 @@
       //#define userawserver //comment out to disable RAW Serial Data BUS Stream on Port 36524, NOT VERIFIED against wired-data-stream
       #define usepacketserver //comment out to disable PACKET Decode on Port 36525
       //#define usemqtt //NOT IMPLEMENTED comment out to disable mqtt functionality
-      #define usestatusled //if enabled update "#define led" with gpionum; 10% dutycycle while searching for known wlans, 50% dutycycle while in wlan client/accesspoint mode, ON if client connected, off if wlan is turned off
+      //#define usestatusled //if enabled update "#define led" with gpionum; 10% dutycycle while searching for known wlans, 50% dutycycle while in wlan client/accesspoint mode, ON if client connected, off if wlan is turned off
     //DEBUG Settings
-      //#define debug_dump_states //dump state machines state
-      //#define debug_dump_rawpackets //dump raw packets to Serial/Telnet
-      //#define debug_dump_packetdecode //dump infos from packet decoder
+      #define debug_dump_states //dump state machines state
+      #define debug_dump_rawpackets //dump raw packets to Serial/Telnet
+      #define debug_dump_packetdecode //dump infos from packet decoder
   #endif
   
 
@@ -90,44 +93,70 @@
 //usually nothing must/should be changed below
 
 //OLED
-#ifdef useoled1
-  #ifdef usei2c
-    #ifdef ESP32
-      #define oled_scl GPIO_NUM_4 //working wemos fake board
-      #define oled_sda GPIO_NUM_16 //working wemos fake board
-    #endif
-    #ifdef ESP8266
-      #define oled_scl 4
-      #define oled_sda 5
-    #endif
-    #define oled_reset -1
-    #define oled1_address 0x3C
-  #else
-    //SPI
-  #endif
-#endif
-
-#if defined useoled2
-  #ifdef usei2c
-    #define oled2_address 0x3D
-  #else
-    //SPI
-  #endif
-  #ifndef useoled1
+#if (!defined useoled1 && defined useoled2)
     #error "useoled2 defined, but useoled1 not defined"
+#endif
+
+#if (!defined ESP32 && !defined usei2c)
+    #error "Hardware SPI only tested on ESP32!!!"
+#endif
+
+#if (defined useoled1 || defined useoled2)
+    #include <Adafruit_SSD1306.h>
+#endif
+
+#if (defined usei2c && defined useoled1) //one display, I2C Mode
+  #ifdef ESP32
+    #define oled_scl GPIO_NUM_4 //working wemos fake board
+    #define oled_sda GPIO_NUM_16 //working wemos fake board
   #endif
+  #ifdef ESP8266
+    #define oled_scl GPIO_NUM_4
+    #define oled_sda GPIO_NUM_5
+  #endif
+  #define oled_reset -1
+  #define oled1_address 0x3C
 #endif
 
-#if (defined useoled1 && !defined useoled2)
-    #include <Adafruit_SSD1306.h>
-    Adafruit_SSD1306 display1(oled_reset);
-    //#define display2 display1
+#if (defined usei2c && defined useoled2) //2nd display, i2c mode
+    #define oled2_address 0x3D
 #endif
 
-#if (defined useoled1 && defined useoled2)
-    #include <Adafruit_SSD1306.h>
+#if (!defined usei2c && defined useoled1 && defined ESP32) //one display, ESP32/Hardware SPI Mode
+    #define OLED_MISO   GPIO_NUM_19 //this is just a unused GPIO pin - SPI Lib needs a MISO Pin, display off course not :D
+    #define OLED_MOSI   GPIO_NUM_33
+    #define OLED_CLK    GPIO_NUM_32
+    #define OLED_DC     GPIO_NUM_25
+    #define OLED1_CS    GPIO_NUM_26 //real oled1
+    #define OLED1_RESET GPIO_NUM_27 //real oled1
+    //#define OLED1_CS    GPIO_NUM_14 //fake oled2 as oled1
+    //#define OLED1_RESET GPIO_NUM_12 //fake oled2 as oled1
+#endif
+
+#if (!defined usei2c && defined useoled1 && defined ESP32) //2nd display, ESP32/Hardware SPI Mode
+    #define OLED2_CS    GPIO_NUM_12
+    #define OLED2_RESET GPIO_NUM_14
+#endif
+
+
+#if (defined usei2c && defined useoled1)
     Adafruit_SSD1306 display1(oled_reset);
+#endif
+#if (defined usei2c && defined useoled2)
     Adafruit_SSD1306 display2(oled_reset);
+#endif
+
+#if (!defined usei2c && defined useoled1)
+    //software spi
+    //Adafruit_SSD1306 display1(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS);
+    //hardware spi with patched Adafruit_SSD1306 Library:
+    Adafruit_SSD1306 display1(OLED_MISO, OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS);
+#endif
+#if (!defined usei2c && defined useoled2)
+    //software spi
+    //Adafruit_SSD1306 display2(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED2_CS);
+    //hardware spi
+    Adafruit_SSD1306 display2(OLED_MISO, OLED_MOSI, OLED_CLK, OLED_DC, OLED2_RESET, OLED2_CS);
 #endif
 
 #if (defined useoled1 || defined useoled2)
@@ -298,17 +327,25 @@
   #ifdef ESP32
     #define DebugSerial Serial //Debuguart = default Serial Port/UART0
     HardwareSerial M365Serial(2);  // UART2for M365
+    /* wemos test board
     #define UART2RX GPIO_NUM_23 //Wemos board
     #define UART2TX GPIO_NUM_5 //Wemos board
     #define UART2RXunused GPIO_NUM_19 //TTGO Test board; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+    */
+    #define UART2RX GPIO_NUM_23 //PCB v180723
+    #define UART2TX GPIO_NUM_22 //PCB v180723
+    //#define UART2RX GPIO_NUM_22 //PCB v180723 FIX SWAP
+    //#define UART2TX GPIO_NUM_23 //PCB v180723 FIX SWAP
+    #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+
     #define M365SerialFull M365Serial.begin(115200,SERIAL_8N1, UART2RX, UART2TX);
     //#define Serial1RX M365Serial.begin(115200,SERIAL_8N1, UART2RX, -1)
     #define M365SerialTX M365Serial.begin(115200,SERIAL_8N1, UART2RXunused, UART2TX);
   #elif defined(ESP8266)
     #define DebugSerial Serial1 //UART1 is TX only, will be mapped to GPIO2 (-> Debug output will be there)
     #define M365Serial Serial  // UART0 will be remapped to GPIO 13(RX) / 15 (TX) and used for M365 Communication
-    #define UART2RX 2 //Wemos board
-    #define UART2TX 4 //Wemos board
+    //#define UART2RX 2 //Wemos board
+    //#define UART2TX 4 //Wemos board
 
     #define M365SerialFull M365Serial.begin(115200,SERIAL_8N1, (SerialMode)UART_FULL); M365Serial.swap();
     //#define Serial1RX M365Serial.begin(115200,SERIAL_8N1, UART_RX_ONLY, UART2RX, UART2TX); M365Serial.swap();
@@ -616,6 +653,11 @@
 
   #define _max(a,b) ((a)>(b)?(a):(b))
   #define _min(a,b) ((a)<(b)?(a):(b))
+
+//preferences
+  Preferences preferences;
+
+
 
 void reset_statistics() {
   packets_rec=0;
@@ -1296,8 +1338,8 @@ void WiFiEvent(WiFiEvent_t event) {
 } //WiFiEvent
 #endif
 
-#ifdef ESP8266
-/*void onStationConnected(const WiFiEventSoftAPModeStationConnected& evt) {
+/*#ifdef ESP8266
+void onStationConnected(const WiFiEventSoftAPModeStationConnected& evt) {
   DebugSerial.println("### WifiEvent: Station connected");
   apnumclientsconnected++;
 }
@@ -1305,8 +1347,9 @@ void WiFiEvent(WiFiEvent_t event) {
 void onStationDisconnected(const WiFiEventSoftAPModeStationDisconnected& evt) {
   DebugSerial.println("### WifiEvent: Station disconnected");
   apnumclientsconnected--;
-}*/
+}
 #endif
+*/
 
 void handle_wlan() {
   switch(wlanstate) {
@@ -1547,13 +1590,15 @@ void oled_startscreen() {
 }
 
 void setup() {
+
+  start_m365();
 #ifdef useoled1
   #ifdef usei2c
     display1.begin(SSD1306_SWITCHCAPVCC, oled1_address, false, oled_sda, oled_scl);
   #else
-    //SPI
+    display1.begin(SSD1306_SWITCHCAPVCC);
   #endif
-  //display1.setRotation(2);
+  display1.setRotation(2); //upside down
   display1.setTextColor(WHITE);
   display1.setFont();
   display1.setTextSize(1);
@@ -1565,7 +1610,7 @@ void setup() {
   #ifdef usei2c
     display2.begin(SSD1306_SWITCHCAPVCC, oled2_address, false,oled_sda, oled_scl);
   #else
-    //SPI
+    display2.begin(SSD1306_SWITCHCAPVCC);
   #endif
   display1.setRotation(0);
   display2.setTextColor(WHITE);
@@ -1591,6 +1636,13 @@ void setup() {
   #endif
   #ifdef ESP32
     DebugSerial.begin(115200);
+    preferences.begin("my-app", false);
+    unsigned int counter = preferences.getUInt("counter", 0);
+    counter++;
+    Serial.printf("Current counter value: %u\r\n", counter);
+    preferences.putUInt("counter", counter);
+    preferences.end();
+
   #endif
   #ifdef ESP8266
     DebugSerial.begin(115200);
@@ -1611,7 +1663,6 @@ void setup() {
     WiFi.macAddress(mc);
     sprintf(mac, "%02X%02X%02X%02X%02X%02X", mc[0], mc[1], mc[2], mc[3], mc[4], mc[5]);
   #endif
-  start_m365();
   ArduinoOTA.onStart([]() {
     DebugSerial.println("OTA Start");
     #ifdef usemqtt
@@ -1643,7 +1694,7 @@ void setup() {
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    DebugSerial.printf("OTA %02u%%\r", (progress / (total / 100)));
+    DebugSerial.printf("OTA %02u%%\r\n", (progress / (total / 100)));
     #if (defined useoled1 && !defined useoled2)
         if ((progress / (total / 100))>lastprogress) {
           lastprogress = progress / (total / 100);
