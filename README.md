@@ -74,7 +74,7 @@ ESP32/8266 needs a Vcc of 3.3V, while at the same time the GPIO Pins are 5V save
 It might be a idea to use e.g. 680R or 1k in series to protect the gpio, as well as add a diode from rx in series with a ~100-200R towards TX
 
 # PCB Bugs v180723
- - 1nF C from EN towards GND and 18k R from EN towards 3.3V are missing
+ - 1nF or 470pF C from EN towards GND and 12-18k R from EN towards 3.3V are missing (sad copy and paste error)
  - the SOT23 Diode housing might be wrong - depending on your Diode (BAS70xx versions) -> the Diode-Package can be rotated 120° CCW to fix that
 
 # possible Issues and Hints

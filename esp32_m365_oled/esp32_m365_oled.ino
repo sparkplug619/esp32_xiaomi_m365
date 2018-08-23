@@ -5,6 +5,18 @@
 //needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer) -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
 
 
+//wlanstateold<> new -> move to handle_wlan & printstates callalso there
+
+//dual-timeout-screen: add ssid/ip display on 2nd screen
+
+//preferences: 8.5 / 10", UART-Send-Off, Beep on backward, 10s/12s, Reboot esp32 ???, Komoot ON/Connect
+
+
+//julien lenkerverbinder
+
+//schaltung r und c auf en
+
+
 #ifdef ESP32
   #include <WiFi.h>
   #include <WiFiUdp.h>
@@ -32,7 +44,7 @@
 
 //Hardwareconfig
   #define useoled1 //comment out to disable oled functionality
-  //#define useoled2
+  #define useoled2
   //#define usei2c //if not defined, spi will be used - SPI NOT IMPLEMENTED YET
 
 
@@ -48,9 +60,9 @@
       //#define usemqtt //NOT IMPLEMENTED comment out to disable mqtt functionality
       //#define usestatusled //if enabled update "#define led" with gpionum; 10% dutycycle while searching for known wlans, 50% dutycycle while in wlan client/accesspoint mode, ON if client connected, off if wlan is turned off
     //DEBUG Settings
-      #define debug_dump_states //dump state machines state
-      #define debug_dump_rawpackets //dump raw packets to Serial/Telnet
-      #define debug_dump_packetdecode //dump infos from packet decoder
+      //#define debug_dump_states //dump state machines state
+      //#define debug_dump_rawpackets //dump raw packets to Serial/Telnet
+      //#define debug_dump_packetdecode //dump infos from packet decoder
   #endif
   
 
@@ -127,15 +139,19 @@
     #define OLED_MOSI   GPIO_NUM_33
     #define OLED_CLK    GPIO_NUM_32
     #define OLED_DC     GPIO_NUM_25
-    #define OLED1_CS    GPIO_NUM_26 //real oled1
-    #define OLED1_RESET GPIO_NUM_27 //real oled1
-    //#define OLED1_CS    GPIO_NUM_14 //fake oled2 as oled1
-    //#define OLED1_RESET GPIO_NUM_12 //fake oled2 as oled1
+    //OLED1 on OLED1 Connector:
+      #define OLED1_CS    GPIO_NUM_26
+      #define OLED1_RESET GPIO_NUM_27
+      #define OLED1_ROTATION 2
+    //OLED1 on OLED2 Connector:
+      //#define OLED1_CS    GPIO_NUM_14
+      //#define OLED1_RESET GPIO_NUM_12
+      //#define OLED1_ROTATION 0
 #endif
 
-#if (!defined usei2c && defined useoled1 && defined ESP32) //2nd display, ESP32/Hardware SPI Mode
-    #define OLED2_CS    GPIO_NUM_12
-    #define OLED2_RESET GPIO_NUM_14
+#if (!defined usei2c && defined useoled2 && defined ESP32) //2nd display, ESP32/Hardware SPI Mode
+    #define OLED2_CS    GPIO_NUM_14
+    #define OLED2_RESET GPIO_NUM_12
 #endif
 
 
@@ -1552,10 +1568,10 @@ void handle_wlan() {
 
 #ifdef debug_dump_states //dump state machine states to Serial Port on change
   void print_states() {
-    if (wlanstate!=wlanstateold) {
-      DebugSerial.printf("### WLANSTATE %d -> %d\r\n",wlanstateold,wlanstate);
-      wlanstateold=wlanstate;
-    }
+    //if (wlanstate!=wlanstateold) {
+    DebugSerial.printf("### WLANSTATE %d -> %d\r\n",wlanstateold,wlanstate);
+    //  wlanstateold=wlanstate;
+    //}
     #ifdef usetelnetserver    
         if (telnetstate!=telnetstateold) {
           DebugSerial.printf("### TELNETSTATE %d -> %d\r\n",telnetstateold,telnetstate);
@@ -1598,7 +1614,7 @@ void setup() {
   #else
     display1.begin(SSD1306_SWITCHCAPVCC);
   #endif
-  display1.setRotation(2); //upside down
+  display1.setRotation(OLED1_ROTATION); //upside down
   display1.setTextColor(WHITE);
   display1.setFont();
   display1.setTextSize(1);
@@ -1613,6 +1629,8 @@ void setup() {
     display2.begin(SSD1306_SWITCHCAPVCC);
   #endif
   display1.setRotation(0);
+  oled_startscreen();
+  display1.setRotation(OLED1_ROTATION); //upside down
   display2.setTextColor(WHITE);
   display2.setFont();
   display2.setTextSize(1);
@@ -2229,13 +2247,19 @@ void oled_switchscreens() {
     if (oledstate==oledtimeout) {
       #ifdef useoled2
         oled_startscreen();
+
       #else
         display1.drawBitmap(0,0,  scooter, 64,64, 1);
         display1.setFont(&fontsmall);
-        display1.setCursor(74,20);
+        display1.setCursor(74,15);
         display1.print("NO");
-        display1.setCursor(64,40);
+        display1.setCursor(64,35);
         display1.print("DATA");
+        display1.setFont();
+        if (wlanstate==wlansearching) { display1.setCursor(64,42); display1.print("WLAN"); display1.setCursor(64,55); display1.print("searching"); }
+        if (wlanstate==wlanconnected) { display1.setCursor(64,42); display1.print(WiFi.SSID()); display1.setCursor(34,57); display1.print(WiFi.localIP()); }
+        if (wlanstate==wlanap) { display1.setCursor(64,42); display1.print(WiFi.softAPIP()); display1.setCursor(34,57); display1.print( WiFi.softAPIP()); }
+        if (wlanstate==wlanoff) { display1.setCursor(64,56); display1.print("WLAN OFF"); }
       #endif
     }
 
@@ -2491,6 +2515,12 @@ void oled_switchscreens() {
       display2.print("DATA");
       display2.setCursor(20,40);
       display2.print("TIMEOUT");
+      display2.setFont();
+      if (wlanstate==wlansearching) { display2.setCursor(0,48); display2.print("WLAN searching..."); }
+      if (wlanstate==wlanconnected) { display2.setCursor(0,48); display2.print("SSID: "); display2.print(WiFi.SSID()); display2.setCursor(0,57); display2.print("IP: "); display2.print(WiFi.localIP()); }
+      if (wlanstate==wlanap) { display2.setCursor(0,48); display2.print("SSID: ");  display2.print(apssid); display2.setCursor(0,57); display2.print("IP: "); display2.print( WiFi.softAPIP()); }
+      if (wlanstate==wlanoff) { display2.setCursor(40,57); display2.print("WLAN OFF"); }
+
     }
 
     duration_oled2draw = micros()-timestamp_oled2draw;
@@ -2554,9 +2584,15 @@ void loop() {
   #ifdef usemqtt
     client.loop();
   #endif
-  #ifdef debug_dump_states
-    print_states();
-  #endif
+    //move this and print_states call to handle_wlan
+  if (wlanstate!=wlanstateold) {
+    wlanstateold=wlanstate;
+    newdata = true; //update display
+    #ifdef debug_dump_states
+      Serial.printf("### WLANSTATE %d -> %d\r\n",wlanstateold,wlanstate);
+      print_states();
+    #endif
+  }
   duration_mainloop=micros()-timestamp_mainloopstart;
 }
 
