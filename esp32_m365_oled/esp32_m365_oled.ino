@@ -1,5 +1,3 @@
-//Screens/Einheitenanzeige wie bei single-screen /Tripinfo
-
 //current version working on esp32 & esp8266
 //needs patch in esp32-arduino-core/esp32-hal-uart.c -> see comments in uart-section below and patch yourself or use https://github.com/smartinick/arduino-esp32
 //needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer) -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
@@ -35,7 +33,7 @@
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.08.25"
+#define swversion "18.08.28"
 
 //scooter config
   //#define batt12s //shows 12 cells on battery/charge screens
@@ -1676,8 +1674,8 @@ void oled_switchscreens() {
     }
   
   //switch to configmenu
-    if (brakebuttonstate==1 & screen==screen_stop) {
-    //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
+    //if (brakebuttonstate==1 & screen==screen_stop) {
+    if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
       screen = screen_configmenu;
       subscreen = 0;
       updatescreen = true;
@@ -2056,7 +2054,7 @@ void oled_switchscreens() {
             display1.setCursor(10,baselineoffset);
             //display1.setCursor(40,10);
             //display1.setFont();
-            display1.printf("Charging %2%%", bmsparsed->remainingpercent);
+            display1.printf("Charging %2d%", bmsparsed->remainingpercent);
             //display1.printf("%02u%%", bmsparsed->remainingpercent);
             display1.drawRect(14,25,100,10,WHITE);
             display1.fillRect(14,26,bmsparsed->remainingpercent,8,WHITE);
