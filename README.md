@@ -33,6 +33,7 @@ Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressi
 - verified function on ESP8266
 - finished screen formating for 1 & 2 .96" displays
 - fixed data-requestor after startup
+- added support for 10" wheels (Speed, Avg Speed, Distance), the questions is what to do with the estimated remaining distance?
 
 # Todos
  - fix - data-requestor timing currently causes ~10% crc errors on m365 bus
@@ -42,7 +43,6 @@ Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressi
    - Check Scooter Error Register
    - Firmware-Flash Protection
    - Alert User if Cell-Voltages difference is above a treshold
- - custom PCB with 2 OLEDs, ESP32S, VReg --> in production
  - add display-sleeptimer - x seconds after last event (gas/brake/throttle/speed/chargerun-plug/telnet/AP-Client Connection & speed = 0)
  - advanced thief/lock protection
  - fix speed for int16 overflow in m/h -> faster than 31.7 -> overflow

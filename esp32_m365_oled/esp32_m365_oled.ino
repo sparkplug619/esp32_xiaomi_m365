@@ -37,7 +37,7 @@
 
 //scooter config
   //#define batt12s //shows 12 cells on battery/charge screens
-  //#define 10inch //NOT IMPLEMENTED -> apply 8,5" -> 10" wheel speed/distance factor = 10/8,5=1,1764705882352941176470588235294
+  #define wheel10inch // -> apply 8,5" -> 10" wheel speed/distance factor = 10/8,5=1,1764705882352941176470588235294
 
 //Hardwareconfig
   #define useoled1 //comment out to disable oled functionality
@@ -642,6 +642,13 @@
   int ledofftime = 10000;
   unsigned long ledcurrenttime = 100;
 #endif
+
+#ifdef wheel10inch
+  #define wheelfact 1.1764705882352941176470588235294f
+#else
+ #define wheelfact 1.0f
+#endif
+
   uint8_t i;
   char tmp1[200];
   char tmp2[200];
@@ -1778,7 +1785,7 @@ void oled_switchscreens() {
         //speed  
           display1.setCursor(0,fontbigbaselinezero-5);
           display1.setFont(&fontbig);
-          display1.printf("%04.1f", abs((float)escparsed->speed/1000.0f));
+          display1.printf("%04.1f", abs((float)escparsed->speed/1000.0f*wheelfact));
           display1.setFont();
           display1.setCursor(84,28);
           display1.println("km/h");
@@ -1786,7 +1793,7 @@ void oled_switchscreens() {
           display1.setFont(&FreeSans18pt7b);
           display1.setCursor(0,63);
           //display1.printf("%6d", bmsparsed->remainingpercent);
-          display1.printf("%04.1f",(float)escparsed->tripdistance/100.0f);
+          display1.printf("%04.1f",(float)escparsed->tripdistance/100.0f*wheelfact);
           display1.setFont();
           display1.setCursor(68,line8); 
           display1.print("km");
@@ -1806,7 +1813,7 @@ void oled_switchscreens() {
         //Speed
           display1.setCursor(0,fontbigbaselinezero-5);
           display1.setFont(&fontbig);
-          display1.printf("%04.1f", abs((float)escparsed->speed/1000.0f));
+          display1.printf("%04.1f", abs((float)escparsed->speed/1000.0f*wheelfact));
           display1.setFont();
           display1.setCursor(84,28);
           display1.print("km/h");
@@ -1838,10 +1845,10 @@ void oled_switchscreens() {
                 display1.print("TRIP Info");
                 //display1.drawFastHLine(0,8,128,WHITE);
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset); display1.print("Avg:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset); display1.printf("%05.2f",(float)escparsed->averagespeed/1000.0f);
+                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset); display1.printf("%05.2f",(float)escparsed->averagespeed/1000.0f*wheelfact);
                 display1.setCursor(100,dataoffset+baselineoffset); display1.setFont(); display1.print("km/h");
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*2+linespace); display1.print("Dist:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset*2+linespace); display1.printf("%05.2f",(float)escparsed->tripdistance/100.0f);
+                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset*2+linespace); display1.printf("%05.2f",(float)escparsed->tripdistance/100.0f*wheelfact);
                 display1.setCursor(100,dataoffset+baselineoffset*2+linespace); display1.setFont(); display1.print("km");
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*3+linespace*2); display1.print("Time:");
                 //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset*3+linespace*2); display1.printf("%05d",escparsed->triptime);
@@ -2034,7 +2041,7 @@ void oled_switchscreens() {
       display1.clearDisplay();
           display1.setFont();
           display1.setCursor(0,0);
-          display1.printf("config menu");
+          display1.printf("config menu, press brake long to exit, nothing to see here yet...");
     }
     if (screen==screen_charging) {
           display1.clearDisplay();
