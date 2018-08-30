@@ -33,11 +33,11 @@
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.08.28"
+#define swversion "18.08.30"
 
 //scooter config
   //#define batt12s //shows 12 cells on battery/charge screens
-  #define wheel10inch // -> apply 8,5" -> 10" wheel speed/distance factor = 10/8,5=1,1764705882352941176470588235294
+  //#define wheel10inch //apply 8,5" -> 10" wheel speed/distance factor = 10/8,5=1,1764705882352941176470588235294
 
 //Hardwareconfig
   #define useoled1 //comment out to disable oled functionality
@@ -258,7 +258,7 @@
   #define wlanturnoff 6 
 
   #define wlanconnecttimeout 10000 //timeout for connecting to one of  the known ssids
-  #define wlanapconnecttimeout 60000 //timeout in ap mode until client needs to connect / ap mode turns off
+  #define wlanapconnecttimeout 600000 //timeout in ap mode until client needs to connect / ap mode turns off
   unsigned long wlanconnecttimestamp = 0;
 
 #ifdef usetelnetserver
@@ -672,6 +672,7 @@
   unsigned long duration_telnet=0;
   unsigned long timestamp_telnetstart=0;
 
+  uint16_t capacitychargestart = 0;
 
   #define _max(a,b) ((a)>(b)?(a):(b))
   #define _min(a,b) ((a)<(b)?(a):(b))
@@ -1645,6 +1646,13 @@ boolean brakebuttonpressed = false;
 unsigned long buttonbrakeshortpressedtimestamp = 0;
 unsigned long buttonbrakelongpressedtimestamp = 0;
 
+#define configsubscreens 8
+#define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
+#define configlinesabove 1
+#define confignumlines 3
+uint8_t configstartindex = 0;
+uint8_t configendindex = 0;
+
 void oled_switchscreens() {
   uint8_t oldscreen = screen;
   
@@ -1681,22 +1689,44 @@ void oled_switchscreens() {
     }
   
   //switch to configmenu
-    //if (brakebuttonstate==1 & screen==screen_stop) {
     if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
       screen = screen_configmenu;
       subscreen = 0;
       updatescreen = true;
     }
+  //exit from configmenu  
     if (brakebuttonstate==2 & screen==screen_configmenu) {
     //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
       screen = screen_stop;
       subscreen = 0;
       updatescreen = true;
     }
+  //configmenu navigaton via gas:
+  if (newdata & (screen==screen_configmenu)) {
+    uint8_t oldsubscreen = subscreen;
+    if (bleparsed->throttle>=gasmin) {
+      subscreen = ((bleparsed->throttle-gasmin) / configwindowsize)+1;
+      subscreen=_min(subscreen,configsubscreens-1);
+      windowsubpos = (uint8_t)((float)((bleparsed->throttle-gasmin) % configwindowsize)*(float)oledwidth/(float)configwindowsize);
+    } else {
+      subscreen=0;
+      windowsubpos=0;
+    }
+    if ((subscreen)>configsubscreens) { subscreen=configsubscreens; }
+    if (subscreen!=oldsubscreen) { 
+      configstartindex = _max(subscreen - configlinesabove,0);
+      configendindex = _min(configstartindex + confignumlines-1,configsubscreens-1);
+      if ((configendindex-confignumlines+1)<configstartindex) {
+        configstartindex = configendindex - confignumlines+1;
+      }
+      updatescreen = true; 
+    }
+  }
   //charging screens: 
     if (newdata & (escparsed->speed==0) & (bmsparsed->current<0) & (screen!=screen_charging)) { 
       screen=screen_charging; 
       //timeout_oled=millis()+oledchargestarttimeout;
+      capacitychargestart = bmsparsed->remainingcapacity;
       updatescreen=true;
     }
     if (newdata & (screen==screen_charging) & (abs((float)escparsed->speed/1000.0f)>2.0f)) { 
@@ -2039,9 +2069,9 @@ void oled_switchscreens() {
     }
     if (screen == screen_configmenu) {
       display1.clearDisplay();
-          display1.setFont();
-          display1.setCursor(0,0);
-          display1.printf("config menu, press brake long to exit, nothing to see here yet...");
+      display1.setFont();
+      display1.setCursor(0,0);
+      display1.printf("startindex: %d\r\nsubscreen: %d\r\nendindex:%d", configstartindex,subscreen,configendindex);
     }
     if (screen==screen_charging) {
           display1.clearDisplay();
@@ -2058,18 +2088,22 @@ void oled_switchscreens() {
             display1.setTextSize(1);
             display1.setTextColor(WHITE);
             display1.setFont(&FreeSans9pt7b); 
-            display1.setCursor(10,baselineoffset);
+            display1.setCursor(2,baselineoffset);
             //display1.setCursor(40,10);
             //display1.setFont();
-            display1.printf("Charging %2d%", bmsparsed->remainingpercent);
+            display1.printf("Charging %2d%%", bmsparsed->remainingpercent);
             //display1.printf("%02u%%", bmsparsed->remainingpercent);
-            display1.drawRect(14,25,100,10,WHITE);
-            display1.fillRect(14,26,bmsparsed->remainingpercent,8,WHITE);
+            display1.drawRect(14,23,100,10,WHITE);
+            display1.fillRect(14,24,bmsparsed->remainingpercent,8,WHITE);
             display1.setFont();
-            display1.setCursor(14,45);
+            //display1.setCursor(14,45);
+            display1.setCursor(14,39);
             display1.printf("%4.1f V   %4.1f A\r\n", (float)bmsparsed->voltage/100.0f,abs((float)bmsparsed->current/100.0f));
-            display1.setCursor(14,56);
-            display1.printf("%4.0f W  %5d mAh",((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f),bmsparsed->remainingcapacity);
+            //display1.setCursor(14,56);
+            display1.setCursor(14,48);
+            display1.printf("%4.0f W  %5d mAh",abs(((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f)),bmsparsed->remainingcapacity);
+            display1.setCursor(14,57);
+            display1.printf("charged %5d mAh",bmsparsed->remainingcapacity-capacitychargestart);
           #if !defined useoled2
               break;
             case 2: //Cell Infos
