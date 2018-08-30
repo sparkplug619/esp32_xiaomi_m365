@@ -5,11 +5,10 @@
 //Test on scooter:
   //dual-timeout-screen: add ssid/ip display on 2nd screen
   //i2c on custom pcb with clock/data on spi pads
-  //#define chargesubscreens 2 -> correct for dual display version?
 
 //fix ssid/passphrase in AP Mode is not used
 
-//preferences: 8.5 / 10", UART-Send-Off, Beep on backward, 10s/12s, Reboot esp32 ???, wlan restart (ssid search/reset timeouts)Komoot ON/Connect
+
 
 
 //julien lenkerverbinder
@@ -1392,6 +1391,8 @@ void handle_wlan() {
         delay(500);
         WiFi.mode(WIFI_OFF);
         yield();
+        WiFi.softAP(apssid, appassword);
+        yield();
         WiFi.mode(WIFI_AP);
         yield();
         apnumclientsconnected=0;
@@ -1403,7 +1404,6 @@ void handle_wlan() {
           stationConnectedHandler = WiFi.onSoftAPModeStationConnected(&onStationConnected);
           stationDisconnectedHandler = WiFi.onSoftAPModeStationDisconnected(&onStationDisconnected);
         #endif
-        WiFi.softAP(apssid, appassword);
         yield();
         DebugSerial.printf("### WLAN AP\r\nSSID: %s, AP IP address: ", apssid);  DebugSerial.println( WiFi.softAPIP());
 #ifdef useoledxxx //POPUP
@@ -1622,6 +1622,40 @@ void handle_led() {
   } //print_states
 #endif
 
+  uint8_t conf_wheelsize;
+  uint8_t conf_battcells;
+  uint8_t conf_alert_batt_celldiff;
+  uint8_t conf_alert_batt_temp;
+  uint8_t conf_alert_esc_temp;
+  bool conf_flashprotect;
+  bool conf_espbusmode;
+
+void loadconfig() {
+  preferences.begin("espm365config", true); //open in readonly mode
+  conf_wheelsize = preferences.getUChar("wheelsize", 0); //0=8.5", 1=10"
+  conf_battcells = preferences.getUChar("battcells", 10); //10 = 10S, 12 = 12S
+  conf_alert_batt_celldiff = preferences.getUChar("alertcelldiff", 50); //50mV difference -> alert
+  conf_alert_batt_temp = preferences.getUChar("alertbatttemp", 50); //50° Celsius -> alert
+  conf_alert_esc_temp = preferences.getUChar("alertesctemp", 50);  //50° Celsius -> alert
+  conf_flashprotect = preferences.getBool("flashprotect",false);
+  conf_espbusmode = preferences.getBool("busmode",false); //false = ESP does not request data, true = ESP requests data
+  preferences.end();
+}
+
+void saveconfig() {
+  preferences.begin("espm365config", true); //open in rw-mode
+  preferences.clear(); //remove all values
+  preferences.putUChar("wheelsize", conf_wheelsize); //0=8.5", 1=10"
+  preferences.putUChar("battcells", conf_battcells); //10 = 10S, 12 = 12S
+  preferences.putUChar("alertcelldiff", conf_alert_batt_celldiff); //50mV difference -> alert
+  preferences.putUChar("alertbatttemp", conf_alert_batt_temp); //50° Celsius -> alert
+  preferences.putUChar("alertesctemp", conf_alert_esc_temp);  //50° Celsius -> alert
+  preferences.putBool("flashprotect",conf_flashprotect);
+  preferences.putBool("busmode",conf_espbusmode); //false = ESP does not request data, true = ESP requests data
+  preferences.end();
+}
+
+
 void oled_startscreen() {
   display1.setFont();
   display1.setTextSize(1);
@@ -1646,10 +1680,10 @@ boolean brakebuttonpressed = false;
 unsigned long buttonbrakeshortpressedtimestamp = 0;
 unsigned long buttonbrakelongpressedtimestamp = 0;
 
-#define configsubscreens 8
+#define configsubscreens 16
 #define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
-#define configlinesabove 1
-#define confignumlines 3
+#define configlinesabove 2
+#define confignumlines 6
 uint8_t configstartindex = 0;
 uint8_t configendindex = 0;
 
@@ -2071,8 +2105,77 @@ void oled_switchscreens() {
       display1.clearDisplay();
       display1.setFont();
       display1.setCursor(0,0);
-      display1.printf("startindex: %d\r\nsubscreen: %d\r\nendindex:%d", configstartindex,subscreen,configendindex);
-    }
+      //display1.printf("startindex: %d\r\nsubscreen: %d\r\nendindex:%d", configstartindex,subscreen,configendindex);
+      uint lineitem=0;
+      lineitem=0;
+      for (uint8_t curline=configstartindex;curline<=configendindex;curline++) {
+        display1.setCursor(5,10*lineitem+5);
+        if (curline==subscreen) {
+          display1.drawRect(0,10*lineitem+3,128,10,WHITE);
+        }
+
+        /*
+          1. Backlight on/off
+          2. Cruise Control on/off
+          3. kers strong/weak/medium
+          4. Wheel Size: 8.5 / 10"
+          5. Battery 10s / 12s
+          8. Battery Cell Voltage Alert
+          9. Temperature Alert
+          7. Firmware Flash Protection
+          6. Start Komoot
+          6. Bus-Mode: Silent/Request (just listening on m365 bus or also requesting data)
+          7. Restart WiFi
+          8. Reboot ESP32 ??
+          9. Exit Menu
+
+        */
+
+
+
+        switch(curline) {
+            case 0: display1.print("Tail Light: ");
+              break;
+            case 1: display1.print("Cruise Control:");
+              break;
+            case 2: display1.print("KERS: ");
+              break;
+            case 3: display1.print("Wheelsize: ");
+                if (conf_wheelsize==0) { display1.print("8.5"""); }
+                if (conf_wheelsize==1) { display1.print("10"""); }
+                if (conf_wheelsize>1) { display1.print("???"); }
+              break;
+            case 4: display1.printf("Battery: %d Cells", conf_battcells);
+              break;
+            case 5: display1.printf("Battery Alert: %dmV", conf_alert_batt_celldiff);
+
+              break;
+            case 6: display1.printf("Batt Temp Alert: %d C", conf_alert_batt_temp);
+              break;
+            case 7: display1.printf("ESC Temp Alert: %d C", conf_alert_esc_temp);
+              break;
+            case 8: display1.print("Flashprotection: ");
+                if (conf_flashprotect) { display1.print("On"); } else { display1.print("Off"); }
+              break;
+            case 9: display1.print("Start BLE for Komoot");
+              break;
+            case 10: display1.print("ESP Busmode: ");
+                if (conf_flashprotect) { display1.print("Active"); } else { display1.print("Passive"); }
+              break;
+            case 11: display1.print("ESP Restart Wifi");
+              break;
+            case 12: display1.print("Exit");
+              break;
+            case 13: display1.print("13");
+              break;
+            case 14: display1.print("14");
+              break;
+            case 15: display1.print("15");
+              break;
+          } //switch curline
+          lineitem++;
+      } //curline loop
+    } //screen == screen_configmenu
     if (screen==screen_charging) {
           display1.clearDisplay();
           display1.setFont();
