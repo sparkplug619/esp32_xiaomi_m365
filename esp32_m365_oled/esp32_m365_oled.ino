@@ -32,7 +32,7 @@
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.08.30"
+#define swversion "18.08.31"
 
 //scooter config
   //#define batt12s //shows 12 cells on battery/charge screens
@@ -41,7 +41,8 @@
 //Hardwareconfig
   #define useoled1 //comment out to disable oled functionality
   #define useoled2
-  //#define usei2c //if not defined, spi will be used - SPI NOT IMPLEMENTED YET
+  //#define usei2c //if not defined, spi will be used, please see pin definitions below (#define oled_scl/sda/mosi/clk/...)
+  #define OLED1_ROTATION 2 //0 = normal, 1= 90, 2=180, 3=270° CW
 
 
   //#define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
@@ -140,7 +141,6 @@
     //OLED1 on OLED1 Connector:
       #define OLED1_CS    GPIO_NUM_26
       #define OLED1_RESET GPIO_NUM_27
-      #define OLED1_ROTATION 2
     //OLED1 on OLED2 Connector:
       //#define OLED1_CS    GPIO_NUM_14
       //#define OLED1_RESET GPIO_NUM_12
