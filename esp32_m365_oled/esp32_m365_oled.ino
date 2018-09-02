@@ -3,13 +3,9 @@
 //needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer) -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
 
 //Test on scooter:
-  //dual-timeout-screen: add ssid/ip display on 2nd screen
   //i2c on custom pcb with clock/data on spi pads
 
 //fix ssid/passphrase in AP Mode is not used
-
-
-
 
 //julien lenkerverbinder
 
