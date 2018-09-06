@@ -9,6 +9,13 @@
 
 //julien lenkerverbinder
 
+
+add command sending for configmenu commands
+add requests for housekeeper
+add housekeeper
+
+make use of config variables outside of menu/load/saveconfig
+
 #ifdef ESP32
   #include <WiFi.h>
   #include <WiFiUdp.h>
@@ -28,7 +35,7 @@
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.08.31"
+#define swversion "18.09.06"
 
 //scooter config
   //#define batt12s //shows 12 cells on battery/charge screens
@@ -1639,7 +1646,7 @@ void loadconfig() {
 }
 
 void saveconfig() {
-  preferences.begin("espm365config", true); //open in rw-mode
+  preferences.begin("espm365config", false); //open in rw-mode
   preferences.clear(); //remove all values
   preferences.putUChar("wheelsize", conf_wheelsize); //0=8.5", 1=10"
   preferences.putUChar("battcells", conf_battcells); //10 = 10S, 12 = 12S
@@ -1650,6 +1657,104 @@ void saveconfig() {
   preferences.putBool("busmode",conf_espbusmode); //false = ESP does not request data, true = ESP requests data
   preferences.end();
 }
+
+
+#define cms_light 0 //tail ligth on/off
+#define cms_cruise 1 //cruise mode on/off
+#define cms_kers 2 //set kers
+#define cms_ws 3 //set wheelsize
+#define cms_bc 4 //set number of cells (10/12s)
+#define cms_bac 5 //set Battery Alert CellVoltage Difference
+#define cms_bat 6 //set Battery Alert Temperature
+#define cms_eat 7 //set ESC Alert Temperature
+#define cms_flashprotection 8 //activate flashprotection
+#define cms_blekomoot 9 //activate ble/komoot navigaton display
+#define cms_busmode 10 //busmode active/passive (request data from m365 or not...?)
+#define cms_wifirestart 11 //restart wifi
+#define cms_exit 12 //exitmenu
+#define configsubscreens 13
+#define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
+#define configlinesabove 2
+#define confignumlines 6
+uint8_t configstartindex = 0;
+uint8_t configendindex = 0;
+bool configchanged = false;
+
+void handle_configmenu() {
+  switch(subscreen) {
+/*
+            case cms_light: display1.print("Tail Light: ");
+                switch(escparsed->taillight) {
+                  case 0: sendlight(2); break;
+                  case 2: sendlight(0); break;
+                }
+              break;
+            case cms_cruise: display1.print("Cruise Control:");
+                switch(escparsed->cruisemode) {
+                  case 0: sendcruise(1); break;
+                  case 1: sendcruise(0); break;
+                }
+
+              break;
+            case cms_kers: display1.print("KERS: ");
+                switch(escparsed->kers) {
+                  case 0: sendkers(1); break;
+                  case 1: sendkers(2); break;
+                  case 2: sendkers(0); break;
+                }
+              break;*/
+            case cms_ws: 
+                if (conf_wheelsize==0) { 
+                    conf_wheelsize=1; 
+                  } else {
+                    conf_wheelsize=0; 
+                  }
+                  configchanged = true;
+              break;
+            case cms_bc: 
+                if (conf_battcells==10) { 
+                  conf_battcells=12; 
+                } else {
+                  conf_battcells=10;
+                }
+                configchanged = true;
+              break;
+            case cms_bac:
+                switch (conf_alert_batt_celldiff) {
+                  case 30: conf_alert_batt_celldiff=50; break;
+                  case 50: conf_alert_batt_celldiff=100; break;
+                  case 100: conf_alert_batt_celldiff=200; break;
+                  case 200: conf_alert_batt_celldiff=30; break;
+                }
+                configchanged = true;
+              break;
+            /*case cms_bat: display1.printf("Batt Temp Alert: %d C", conf_alert_batt_temp);
+              break;
+            case cms_eat: display1.printf("ESC Temp Alert: %d C", conf_alert_esc_temp);
+              break;*/
+            case cms_flashprotection: 
+                conf_flashprotect = !conf_flashprotect;
+                configchanged = true;
+              break;
+            /*case cms_blekomoot: display1.print("Start BLE for Komoot");
+              break;*/
+            case cms_busmode: 
+                conf_espbusmode = !conf_espbusmode;
+                configchanged = true;
+              break;
+            case cms_wifirestart:
+                wlanstate = wlanturnapon;
+                screen = screen_stop;
+                subscreen = 0;
+                if (configchanged) { saveconfig(); }
+              break;
+            case cms_exit:
+                screen = screen_stop;
+                subscreen = 0;
+                if (configchanged) { saveconfig(); }
+              break;
+          } //switch curline
+} //handle_configmenu
 
 
 void oled_startscreen() {
@@ -1675,13 +1780,6 @@ boolean brakebuttonpressed = false;
 #define buttonbrakelongpressedduration 500
 unsigned long buttonbrakeshortpressedtimestamp = 0;
 unsigned long buttonbrakelongpressedtimestamp = 0;
-
-#define configsubscreens 16
-#define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
-#define configlinesabove 2
-#define confignumlines 6
-uint8_t configstartindex = 0;
-uint8_t configendindex = 0;
 
 void oled_switchscreens() {
   uint8_t oldscreen = screen;
@@ -1718,15 +1816,22 @@ void oled_switchscreens() {
       brakebuttonpressed=false;
     }
   
-  //switch to configmenu
-    if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
-      screen = screen_configmenu;
-      subscreen = 0;
+  //execute commands from configscreen
+    if (screen==screen_configmenu & brakebuttonstate==1) {
+      handle_configmenu();
       updatescreen = true;
     }
-  //exit from configmenu  
+  //switch to configmenu
+    if (brakebuttonstate==1 & ((screen==screen_stop & subscreen == stopsubscreens) || (screen==screen_charging))) {
+      screen = screen_configmenu;
+      subscreen = 0;
+      configchanged = false;
+      updatescreen = true;
+    }
+  //exit from configmenu via long-brake-press
     if (brakebuttonstate==2 & screen==screen_configmenu) {
     //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
+      if (configchanged) { saveconfig(); }
       screen = screen_stop;
       subscreen = 0;
       updatescreen = true;
@@ -2110,63 +2215,54 @@ void oled_switchscreens() {
           display1.drawRect(0,10*lineitem+3,128,10,WHITE);
         }
 
-        /*
-          1. Backlight on/off
-          2. Cruise Control on/off
-          3. kers strong/weak/medium
-          4. Wheel Size: 8.5 / 10"
-          5. Battery 10s / 12s
-          8. Battery Cell Voltage Alert
-          9. Temperature Alert
-          7. Firmware Flash Protection
-          6. Start Komoot
-          6. Bus-Mode: Silent/Request (just listening on m365 bus or also requesting data)
-          7. Restart WiFi
-          8. Reboot ESP32 ??
-          9. Exit Menu
-
-        */
-
-
-
         switch(curline) {
-            case 0: display1.print("Tail Light: ");
+            case cms_light:
+                display1.print("Tail Light: ");
+                  switch(escparsed->taillight) {
+                    case 0: display1.print("Off"); break;
+                    case 2: display1.print("On"); break;
+                  }
               break;
-            case 1: display1.print("Cruise Control:");
+            case cms_cruise: 
+                display1.print("Cruise Control:");
+                  switch(escparsed->cruisemode) {
+                    case 0: display1.print("On"); break;
+                    case 1: display1.print("Off"); break;
+                  }
               break;
-            case 2: display1.print("KERS: ");
+            case cms_kers: 
+                display1.print("KERS: ");
+                  switch(escparsed->kers) {
+                    case 0: display1.print("weak"); break;
+                    case 1: display1.print("medium"); break;
+                    case 2: display1.print("strong"); break;
+                  }
               break;
-            case 3: display1.print("Wheelsize: ");
-                if (conf_wheelsize==0) { display1.print("8.5"""); }
-                if (conf_wheelsize==1) { display1.print("10"""); }
+            case cms_ws: display1.print("Wheelsize: ");
+                if (conf_wheelsize==0) { display1.print("8.5\""); }
+                if (conf_wheelsize==1) { display1.print("10\""); }
                 if (conf_wheelsize>1) { display1.print("???"); }
               break;
-            case 4: display1.printf("Battery: %d Cells", conf_battcells);
+            case cms_bc: display1.printf("Battery: %d Cells", conf_battcells);
               break;
-            case 5: display1.printf("Battery Alert: %dmV", conf_alert_batt_celldiff);
+            case cms_bac: display1.printf("Battery Alert: %dmV", conf_alert_batt_celldiff);
 
               break;
-            case 6: display1.printf("Batt Temp Alert: %d C", conf_alert_batt_temp);
+            case cms_bat: display1.printf("Batt Temp Alert: %d C", conf_alert_batt_temp);
               break;
-            case 7: display1.printf("ESC Temp Alert: %d C", conf_alert_esc_temp);
+            case cms_eat: display1.printf("ESC Temp Alert: %d C", conf_alert_esc_temp);
               break;
-            case 8: display1.print("Flashprotection: ");
+            case cms_flashprotection: display1.print("Flashprotection: ");
                 if (conf_flashprotect) { display1.print("On"); } else { display1.print("Off"); }
               break;
-            case 9: display1.print("Start BLE for Komoot");
+            case cms_blekomoot: display1.print("Start BLE for Komoot");
               break;
-            case 10: display1.print("ESP Busmode: ");
-                if (conf_flashprotect) { display1.print("Active"); } else { display1.print("Passive"); }
+            case cms_busmode: display1.print("ESP Busmode: ");
+                if (conf_espbusmode) { display1.print("Active"); } else { display1.print("Passive"); }
               break;
-            case 11: display1.print("ESP Restart Wifi");
+            case cms_wifirestart: display1.print("ESP Restart Wifi");
               break;
-            case 12: display1.print("Exit");
-              break;
-            case 13: display1.print("13");
-              break;
-            case 14: display1.print("14");
-              break;
-            case 15: display1.print("15");
+            case cms_exit: display1.print("Exit");
               break;
           } //switch curline
           lineitem++;
@@ -2242,25 +2338,27 @@ void oled_switchscreens() {
           display1.setFont();
           display1.setCursor(0,56);
           switch (escparsed->error) {
-            case 10: display1.print("BLE Communication"); break;
-            case 11:
-            case 12:
-            case 13:
-            case 28:
-            case 29: display1.print("Shunt or FET"); break;
-            case 14:
-            case 15: display1.print("THROTTLE/BRAKE"); break;
-            case 18: display1.print("MOTOR HALL SENSOR"); break;
-            case 21: display1.print("BMS Communication"); break;
-            case 22:
-            case 23: display1.print("BMS Serialnumber"); break;
-            case 24: display1.print("VOLTAGE WRONG"); break;
-            case 27:
-            case 39: display1.print("ESC Serial/Activation"); break;
-            case 35:
-            case 36: display1.print("BATT TEMP ALERT"); break;
-            case 40: display1.print("ESC TEMP ALERT"); break;
-            default: display1.print("unknown code^"); break;
+            case 10: display2.print("BLE Communication"); break;
+            case 11: display2.print("Mot Phase A Current"); break;
+            case 12: display2.print("Mot Phase B Current"); break;
+            case 13: display2.print("Mot Phase C Current"); break;
+            case 14: display2.print("THROTTLE SENSOR"); break;
+            case 15: display2.print("BRAKE SENSOR"); break;
+            case 18: display2.print("MOTOR HALL SENSOR"); break;
+            case 21: display2.print("BMS Communication"); break;
+            case 22: display2.print("Bad BMS Password"); break;
+            case 23: display2.print("BMS Serialnumber"); break;
+            case 24: display2.print("VOLTAGE WRONG"); break;
+            case 26: display2.print("EEPROM/FLASH CRC"); break;
+            case 27: display2.print("Bad ESC Password"); break;
+            case 28: display2.print("hS FET Error"); break;
+            case 29: display2.print("lS FET Error"); break;
+            case 31: display2.print("Program Error"); break;
+            case 35: display2.print("ESC Serial"); break;
+            case 36: display2.print("ESC Activation"); break;
+            case 39: display2.print("BATT TEMP ALERT"); break;
+            case 40: display2.print("ESC TEMP ALERT"); break;
+            default: display2.print("unknown code"); break;
           }
         #else
           display1.setFont(&fontsmall);
@@ -2294,22 +2392,22 @@ void oled_switchscreens() {
       if (screen==screen_drive) {
         //if (screen==screen_drive) {
         //LIGHT ON/OFF
+          display1.setFont(&FreeSans9pt7b); 
           if (x1parsed->light==0x64) { 
-            display1.setFont();
-            display1.setCursor(122,line1);
+            //display1.setFont();
+            display1.setCursor(110,20);
             display1.print("L");
           }
         //NORMAL/ECO MODE
-          display1.setFont();
-          display1.setCursor(122,line2);
+          display1.setCursor(120,20);
           if (x1parsed->mode<2) { 
             display1.print("N"); //normal mode
           } else {
             display1.print("E"); //eco mode
           }
         //WLAN STATUS
-          display1.setFont();
-          display1.setCursor(116,line3);
+          //display1.setFont();
+          display1.setCursor(110,fontsmallheight<<1);
           if (wlanstate==wlansearching) { display1.print("WS"); }
           if (wlanstate==wlanconnected) { display1.print("WC"); }
           if (wlanstate==wlanap) { display1.print("WA"); }
@@ -2321,6 +2419,7 @@ void oled_switchscreens() {
         //  display1.setCursor(116,line4);
         //  if (blestate==blesearching) { display1.print("BS"); }
         //  if (blestate==bleconnected) { display1.print("BC"); }
+        display1.setFont();
       }
       if ((screen==screen_stop)&(subscreen==0)) {
         //if (screen==screen_drive) {
@@ -2659,6 +2758,7 @@ void setup() {
     preferences.putUInt("counter", counter);
     preferences.end();
 
+    loadconfig();
   #endif
   #ifdef ESP8266
     DebugSerial.begin(115200);
