@@ -5,11 +5,16 @@
 //needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer) -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
 
 //fix ssid/passphrase in AP Mode is not used
+//make use of config variables flashprotect / test if needed at all
+//add display popup/alerts
+//display alerts....
+//add alertcounter, count alert-toggles and add counter to display/telnet
+//fix timing/crc issues
+//add trip computer
+//add mqtt logging
 
-//add command sending for configmenu commands
-//add requests for housekeeper
-//add housekeeper
-//make use of config variables flashprotect, alert cell/temperatures
+//check if ESC Array - LOCK STATE = 0xb2 len 02 ??? -> add to telnet, oled and make "LOCKED" state (lock via menu, unlock via secrect brake/gas)
+
 
 #ifdef ESP32
   #include <WiFi.h>
@@ -558,6 +563,10 @@
   #define cmd_cruise_off 5
   #define cmd_light_on 6
   #define cmd_light_off 7
+  #define cmd_turnoff 8
+  #define cmd_lock 9
+  #define cmd_unlock 10
+  //#define cmd_beep 11
 
 
 //M365 - request stuff 
@@ -902,6 +911,9 @@ void m365_handlerequests() {
           case cmd_cruise_off: m365_sendcommand(0x7c,0,0); break;
           case cmd_light_on: m365_sendcommand(0x7d,2,0); break;
           case cmd_light_off: m365_sendcommand(0x7d,0,0); break;
+          case cmd_turnoff: m365_sendcommand(0x79,01,0); break;
+          case cmd_lock: m365_sendcommand(0x70,01,0); break; //maybe swap par1 & 2?
+          case cmd_unlock: m365_sendcommand(0x71,01,0); break;
         } //switch sendcommand
     sendcommand = cmd_none; //reset  
   } else {
@@ -1824,8 +1836,11 @@ void saveconfig() {
 #define cms_blekomoot 9 //activate ble/komoot navigaton display
 #define cms_busmode 10 //busmode active/passive (request data from m365 or not...?)
 #define cms_wifirestart 11 //restart wifi
-#define cms_exit 12 //exitmenu
-#define configsubscreens 13
+#define cms_lock 12
+#define cms_unlock 13
+#define cms_turnoff 14
+#define cms_exit 15 //exitmenu
+#define configsubscreens 16
 #define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
 #define configlinesabove 2
 #define confignumlines 6
@@ -1900,6 +1915,15 @@ void handle_configmenu() {
                 screen = screen_stop;
                 subscreen = 0;
                 if (configchanged) { saveconfig(); applyconfig(); }
+              break;
+            case cms_lock:
+                sendcommand = cmd_lock;
+              break;
+            case cms_unlock:
+                sendcommand = cmd_unlock;
+              break;
+            case cms_turnoff:
+                sendcommand = cmd_turnoff;
               break;
             case cms_exit:
                 screen = screen_stop;
@@ -2412,6 +2436,12 @@ void oled_switchscreens() {
                 if (conf_espbusmode) { display1.print("Active"); } else { display1.print("Passive"); }
               break;
             case cms_wifirestart: display1.print("ESP Restart Wifi");
+              break;
+            case cms_lock: display1.print("M365 LOCK");
+              break;
+            case cms_unlock: display1.print("M365 UNLOCK");
+              break;
+            case cms_turnoff: display1.print("M365 OFF");
               break;
             case cms_exit: display1.print("Exit");
               break;
