@@ -414,6 +414,7 @@
   uint16_t packetsperaddress[256];
   uint16_t requests_sent_bms=0;
   uint16_t requests_sent_esc=0;
+  uint16_t commands_sent=0;
 
   int16_t speed_min = 0;
   int16_t speed_max = 0;
@@ -538,6 +539,27 @@
   bool newdata = false; //flag - we have update at least one byte in one of the data arrays
   bool senddata = false; //flag - we should send our data request _now_
 
+//M365 - command stuff
+  #define commandlen 10
+  uint8_t command[commandlen] = { 0x55,0xAA,0x04,0x20,0x03,0x01,0x02,0x03,0xB7,0xFF};
+  #define command_cmd 5
+  #define command_value1 6
+  #define command_value2 7
+  #define command_crcstart 2
+  #define command_crc1 8
+  #define command_crc2 9
+
+  uint8_t sendcommand = 0;
+  #define cmd_none 0
+  #define cmd_kers_weak 1
+  #define cmd_kers_medium 2
+  #define cmd_kers_strong 3
+  #define cmd_cruise_on 4
+  #define cmd_cruise_off 5
+  #define cmd_light_on 6
+  #define cmd_light_off 7
+
+
 //M365 - request stuff 
   /*
   request data from esc:   (Read 0x7x 2 words)
@@ -549,7 +571,8 @@
   */
 
   //packet for bms requests and offsets
-    uint8_t request_bms[9] = { 0x55,0xAA,0x03,0x22,0x01,0x10,0x3A,0xB7,0xFF};
+    #define requestbmslen 9
+    uint8_t request_bms[requestbmslen] = { 0x55,0xAA,0x03,0x22,0x01,0x10,0x3A,0xB7,0xFF};
     //uint8_t request_bms_serial[9] = { 0x55,0xAA,0x03,0x22,0x01,0x10,0x12,0xB7,0xFF};
     #define bms_request_offset 5
     #define bms_request_len 6
@@ -557,7 +580,8 @@
     #define bms_request_crc1 7
     #define bms_request_crc2 8
   //packets for esc requests and offsets
-    uint8_t request_esc[12] = { 0x55,0xAA,0x06,0x20,0x61,0x10,0xAC,0x02,0x28,0x27,0xB7,0xFF};
+    #define requestesclen 12
+    uint8_t request_esc[requestesclen] = { 0x55,0xAA,0x06,0x20,0x61,0x10,0xAC,0x02,0x28,0x27,0xB7,0xFF};
     //uint8_t request_esc_speed[12] = { 0x55,0xAA,0x06,0x20,0x61,0x7c,0x02,0x02,0x28,0x27,0xB7,0xFF};
     #define esc_request_offset 5 
     #define esc_request_len 6
@@ -603,6 +627,8 @@
     };
 
   uint8_t subscribedrequests =  rqsarray[0];
+  uint8_t housekeeperrequests = rq_bms_cells|rq_esc_essentials|rq_bms_essentials;
+  uint8_t hkrequestindex=0;
 
 //Screen Switching
   uint8_t screen = 0;
@@ -784,6 +810,7 @@ void handle_housekeeper() {
     case hkwaiting: //check timeout, if over request data
         if (millis()>housekeepertimestamp) {
           hkstate = hkrequesting;
+          hkrequestindex = 0; //start new hk requestcycle
           //set requestor stuff
         }
       break;
@@ -817,63 +844,129 @@ void handle_housekeeper() {
 } //handle_housekeeper
 
 
-void m365_handlerequests() {
-  //find next subscribed index
-    uint8_t startindex = requestindex;
-    while (!(subscribedrequests&(1<<requestindex)))  {
-      //DebugSerial.printf("skipping RQ index %d\r\n",requestindex+1);
-      requestindex++;
-      if (requestindex==requestmax) {
-          //DebugSerial.println("rollover in rqloop1");
-          requestindex=0; 
-          duration_requestcycle=millis()-timestamp_requeststart;
-          timestamp_requeststart=millis(); 
-      }
-      if (requestindex==startindex) { break; }
+void m365_sendcommand(uint8_t cvalue, uint8_t cparam1, uint8_t cparam2) {
+  command[command_cmd] = cvalue;
+  command[command_value1] = cparam1;
+  command[command_value2] = cparam2;
+  crccalc = 0x00;
+  for(uint8_t i=command_crcstart;i<command_crc1;i++) {
+    crccalc=crccalc + command[i];
+  }
+  crccalc = crccalc ^ 0xffff;
+  command[command_crc1]=(uint8_t)(crccalc&0xff);
+  command[command_crc2]=(uint8_t)((crccalc&0xff00)>>8);
+  M365Serial.write((unsigned char*)&command,commandlen);
+  commands_sent++;
+} //m365_sendcommand
+
+void m365_sendrequest(uint8_t radr, uint8_t roffset, uint8_t rlen) {
+    if (radr==address_bms) {
+    request_bms[bms_request_offset] = roffset;
+    request_bms[bms_request_len] = rlen;
+    crccalc = 0x00;
+    for(uint8_t i=bms_request_crcstart;i<bms_request_crc1;i++) {
+      crccalc=crccalc + request_bms[i];
     }
-  //request data for current index if we are interested in
-  if (subscribedrequests&(1<<requestindex)) {
-    //DebugSerial.printf("requesting RQ index %d\r\n",requestindex+1);
-    if (requests[requestindex][0]==address_bms) {
-      request_bms[bms_request_offset] = requests[requestindex][1];
-      request_bms[bms_request_len] = requests[requestindex][2];
-      crccalc = 0x00;
-      for(uint8_t i=bms_request_crcstart;i<bms_request_crc1;i++) {
-        crccalc=crccalc + request_bms[i];
-      }
-      crccalc = crccalc ^ 0xffff;
-      request_bms[bms_request_crc1]=(uint8_t)(crccalc&0xff);
-      request_bms[bms_request_crc2]=(uint8_t)((crccalc&0xff00)>>8);
-      M365Serial.write((unsigned char*)&request_bms,9);
-      requests_sent_bms++;
-    } //if address address_bms
-    if (requests[requestindex][0]==address_esc) {
-      request_esc[esc_request_offset] = requests[requestindex][1];
-      request_esc[esc_request_len] = requests[requestindex][2];
-      request_esc[esc_request_throttle] = bleparsed->throttle;
-      request_esc[esc_request_brake] = bleparsed->brake;
-      crccalc = 0x00;
-      for(uint8_t i=esc_request_crcstart;i<esc_request_crc1;i++) {
-        crccalc=crccalc + request_esc[i];
-      }
-      crccalc = crccalc ^ 0xffff;
-      request_esc[esc_request_crc1]=(uint8_t)(crccalc&0xff);
-      request_esc[esc_request_crc2]=(uint8_t)((crccalc&0xff00)>>8);
-      M365Serial.write((unsigned char*)&request_esc,12);
-      requests_sent_esc++;
-    } //if address address_esc
+    crccalc = crccalc ^ 0xffff;
+    request_bms[bms_request_crc1]=(uint8_t)(crccalc&0xff);
+    request_bms[bms_request_crc2]=(uint8_t)((crccalc&0xff00)>>8);
+    M365Serial.write((unsigned char*)&request_bms,requestbmslen);
+    requests_sent_bms++;
+  } //if address address_bms
+  if (radr==address_esc) {
+    request_esc[esc_request_offset] = roffset;
+    request_esc[esc_request_len] = rlen;
+    request_esc[esc_request_throttle] = bleparsed->throttle;
+    request_esc[esc_request_brake] = bleparsed->brake;
+    crccalc = 0x00;
+    for(uint8_t i=esc_request_crcstart;i<esc_request_crc1;i++) {
+      crccalc=crccalc + request_esc[i];
+    }
+    crccalc = crccalc ^ 0xffff;
+    request_esc[esc_request_crc1]=(uint8_t)(crccalc&0xff);
+    request_esc[esc_request_crc2]=(uint8_t)((crccalc&0xff00)>>8);
+    M365Serial.write((unsigned char*)&request_esc,requestesclen);
+    requests_sent_esc++;
+  } //if address address_esc
+} //m365_sendrequest
+
+void m365_handlerequests() {
+  uint8_t startindex;
+  //1st prio: send comands?
+  if (sendcommand != cmd_none) {
+      switch(sendcommand) {
+          case cmd_kers_weak: m365_sendcommand(0x7b,0,0); break;
+          case cmd_kers_medium: m365_sendcommand(0x7b,1,0); break;
+          case cmd_kers_strong: m365_sendcommand(0x7b,2,0); break;
+          case cmd_cruise_on: m365_sendcommand(0x7c,1,0); break;
+          case cmd_cruise_off: m365_sendcommand(0x7c,0,0); break;
+          case cmd_light_on: m365_sendcommand(0x7d,2,0); break;
+          case cmd_light_off: m365_sendcommand(0x7d,0,0); break;
+        } //switch sendcommand
+    sendcommand = cmd_none; //reset  
   } else {
-    //DebugSerial.printf("skipping RQ index %d\r\n",requestindex+1);
-  }
-  //prepare next requestindex for next call
-  requestindex++;
-  if (requestindex==requestmax) { 
-    //DebugSerial.println("rollover in rqloop2");
-    requestindex=0; 
-    duration_requestcycle=millis()-timestamp_requeststart;
-    timestamp_requeststart=millis();
-  }
-  //DebugSerial.printf("---REQUEST-- %d\r\n",millis());
+    //2nd prio: housekeeper todos?
+        if (hkstate==hkrequesting) {
+          //find next subscribed index
+          startindex = hkrequestindex;
+          while (!(housekeeperrequests&(1<<hkrequestindex)))  {
+            //DebugSerial.printf("HK skipping RQ index %d\r\n",hkrequestindex+1);
+            hkrequestindex++;
+            if (hkrequestindex==requestmax) {
+                //DebugSerial.println("HK rollover in rqloop1");
+                hkrequestindex=0;
+                hkstate=hkevaluating; //we are done with one request-cycle, evaluate... 
+            }
+            if (hkrequestindex==startindex) { break; }
+          }
+        //request data for current index if we are interested in
+        if (housekeeperrequests&(1<<hkrequestindex)) {
+          //DebugSerial.printf("HK requesting RQ index %d\r\n",hkrequestindex+1);
+          m365_sendrequest(requests[hkrequestindex][0], requests[hkrequestindex][1], requests[hkrequestindex][2]);
+        } /*else {
+          DebugSerial.printf("HK skipping RQ index %d\r\n",hkrequestindex+1);
+        }*/
+        //prepare next requestindex for next call
+        hkrequestindex++;
+        if (hkrequestindex==requestmax) { 
+          //DebugSerial.println("HK rollover in rqloop2");
+          hkrequestindex=0; 
+          hkstate=hkevaluating; //we are done with one request-cycle, evaluate... 
+        }
+        //DebugSerial.printf("---HKREQUEST-- %d\r\n",millis());
+      } else {
+      //3rd prio - request other data for display
+      //find next subscribed index
+        startindex = requestindex;
+        while (!(subscribedrequests&(1<<requestindex)))  {
+          //DebugSerial.printf("skipping RQ index %d\r\n",requestindex+1);
+          requestindex++;
+          if (requestindex==requestmax) {
+              //DebugSerial.println("rollover in rqloop1");
+              requestindex=0; 
+              duration_requestcycle=millis()-timestamp_requeststart;
+              timestamp_requeststart=millis(); 
+          }
+          if (requestindex==startindex) { break; }
+        }
+      //request data for current index if we are interested in
+      if (subscribedrequests&(1<<requestindex)) {
+        //DebugSerial.printf("requesting RQ index %d\r\n",requestindex+1);
+        m365_sendrequest(requests[requestindex][0], requests[requestindex][1], requests[requestindex][2]);
+      } /*else {
+        DebugSerial.printf("skipping RQ index %d\r\n",requestindex+1);
+      }*/
+      //prepare next requestindex for next call
+      requestindex++;
+      if (requestindex==requestmax) { 
+        //DebugSerial.println("rollover in rqloop2");
+        requestindex=0; 
+        duration_requestcycle=millis()-timestamp_requeststart;
+        timestamp_requeststart=millis();
+      }
+      //DebugSerial.printf("---REQUEST-- %d\r\n",millis());
+    } //else if hkstate
+  } //else if sendcommand
 } //m365_handlerequests
 
 void m365_handlepacket() {
@@ -1102,6 +1195,7 @@ void telnet_refreshscreen() {
             break;
           case ts_statistics:
               telnetclient.printf("Requests Sent:\r\n  ESC: %05d   BMS: %05d   Total: %05d\r\n", requests_sent_esc, requests_sent_bms, requests_sent_bms+requests_sent_esc);
+              telnetclient.printf("Commands Sent: %05d\r\n", commands_sent);
               telnetclient.printf("Packets Received:\r\n  ESC: %05d   BMS: %05d   BLE: %05d   X1: %05d   unhandled: %05d\r\n", packets_rec_esc,packets_rec_bms,packets_rec_ble,packets_rec_x1,packets_rec_unhandled);
               telnetclient.printf("  CRC OK: %05d   CRC FAIL: %05d\r\n   Total: %05d\r\n",packets_crcok,packets_crcfail,packets_rec);
               telnetclient.printf("\r\nTimers:\r\n  Main:   %04.3f ms\r\n  Telnet: %04.3f ms\r\n",(float)duration_mainloop/1000.0f, (float)duration_telnet/1000.0f);
@@ -1741,27 +1835,26 @@ bool configchanged = false;
 
 void handle_configmenu() {
   switch(subscreen) {
-/*
-            case cms_light: display1.print("Tail Light: ");
+            case cms_light:
                 switch(escparsed->taillight) {
-                  case 0: sendlight(2); break;
-                  case 2: sendlight(0); break;
+                  case 0: sendcommand = cmd_light_on; break;
+                  case 2: sendcommand = cmd_light_off; break;
                 }
               break;
-            case cms_cruise: display1.print("Cruise Control:");
+            case cms_cruise:
                 switch(escparsed->cruisemode) {
-                  case 0: sendcruise(1); break;
-                  case 1: sendcruise(0); break;
+                  case 0: sendcommand = cmd_cruise_on; break;
+                  case 1: sendcommand = cmd_cruise_off; break;
                 }
 
               break;
-            case cms_kers: display1.print("KERS: ");
+            case cms_kers:
                 switch(escparsed->kers) {
-                  case 0: sendkers(1); break;
-                  case 1: sendkers(2); break;
-                  case 2: sendkers(0); break;
+                  case 0: sendcommand = cmd_kers_weak; break;
+                  case 1: sendcommand = cmd_kers_medium; break;
+                  case 2: sendcommand = cmd_kers_strong; break;
                 }
-              break;*/
+              break;
             case cms_ws: 
                 if (conf_wheelsize==0) { 
                     conf_wheelsize=1; 
