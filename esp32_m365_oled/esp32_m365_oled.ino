@@ -1,20 +1,15 @@
-//current version working on esp32 & esp8266
+//current version working on esp32 ONLY
+//esp8266 has no preferences class, i'm not using esp8266 anymore, if someone implements load/saveconfig methods for esp8266 i'm happy to merge your pull-request
+
 //needs patch in esp32-arduino-core/esp32-hal-uart.c -> see comments in uart-section below and patch yourself or use https://github.com/smartinick/arduino-esp32
 //needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer) -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
 
-//Test on scooter:
-  //i2c on custom pcb with clock/data on spi pads
-
 //fix ssid/passphrase in AP Mode is not used
 
-//julien lenkerverbinder
-
-
-add command sending for configmenu commands
-add requests for housekeeper
-add housekeeper
-
-make use of config variables outside of menu/load/saveconfig
+//add command sending for configmenu commands
+//add requests for housekeeper
+//add housekeeper
+//make use of config variables flashprotect, alert cell/temperatures
 
 #ifdef ESP32
   #include <WiFi.h>
@@ -23,7 +18,7 @@ make use of config variables outside of menu/load/saveconfig
   #include <Preferences.h>
   
 #elif defined(ESP8266)
-  #warning "Preferences not supported on ESP8266"
+  #error "Preferences not supported on ESP8266"
   #include <ESP8266WiFi.h>
   #include <WiFiUdp.h>
   WiFiEventHandler stationConnectedHandler;
@@ -35,11 +30,10 @@ make use of config variables outside of menu/load/saveconfig
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.09.06"
+#define swversion "18.09.07"
 
 //scooter config
-  //#define batt12s //shows 12 cells on battery/charge screens
-  //#define wheel10inch //apply 8,5" -> 10" wheel speed/distance factor = 10/8,5=1,1764705882352941176470588235294
+  //Info: batt12s and wheelsize have been removed --> implemented via configmenu, default 10s batt and 8.5" wheel
 
 //Hardwareconfig
   #define useoled1 //comment out to disable oled functionality
@@ -645,11 +639,6 @@ make use of config variables outside of menu/load/saveconfig
   unsigned long ledcurrenttime = 100;
 #endif
 
-#ifdef wheel10inch
-  #define wheelfact 1.1764705882352941176470588235294f
-#else
- #define wheelfact 1.0f
-#endif
 
   uint8_t i;
   char tmp1[200];
@@ -659,6 +648,7 @@ make use of config variables outside of menu/load/saveconfig
   char mac[12];
   unsigned int lastprogress=0;
 
+//timing & statistics
   unsigned long duration_mainloop=0;
   unsigned long timestamp_mainloopstart=0;
   unsigned long duration_oled=0;
@@ -676,12 +666,22 @@ make use of config variables outside of menu/load/saveconfig
 
   uint16_t capacitychargestart = 0;
 
+//helpers
   #define _max(a,b) ((a)>(b)?(a):(b))
   #define _min(a,b) ((a)<(b)?(a):(b))
 
-//preferences
+//configmenu stuff
   Preferences preferences;
-
+  uint8_t conf_wheelsize;
+  uint8_t conf_battcells;
+  uint8_t conf_alert_batt_celldiff;
+  uint8_t conf_alert_batt_temp;
+  uint8_t conf_alert_esc_temp;
+  bool conf_flashprotect;
+  bool conf_espbusmode;
+  #define wheelfact10 1.1764705882352941176470588235294f
+  #define wheelfact8 1.0f
+  float wheelfact = 0;
 
 
 void reset_statistics() {
@@ -738,24 +738,18 @@ void m365_updatestats() {
   //Cell Voltages
     highest = 0;
     lowest =10000;
-    if (bmsparsed->Cell1Voltage>0) { lowest=_min(lowest,bmsparsed->Cell1Voltage); highest=_max(highest,bmsparsed->Cell1Voltage); }
-    if (bmsparsed->Cell2Voltage>0) { lowest=_min(lowest,bmsparsed->Cell2Voltage); highest=_max(highest,bmsparsed->Cell2Voltage); }
-    if (bmsparsed->Cell3Voltage>0) { lowest=_min(lowest,bmsparsed->Cell3Voltage); highest=_max(highest,bmsparsed->Cell3Voltage); }
-    if (bmsparsed->Cell4Voltage>0) { lowest=_min(lowest,bmsparsed->Cell4Voltage); highest=_max(highest,bmsparsed->Cell4Voltage); }
-    if (bmsparsed->Cell5Voltage>0) { lowest=_min(lowest,bmsparsed->Cell5Voltage); highest=_max(highest,bmsparsed->Cell5Voltage); }
-    if (bmsparsed->Cell6Voltage>0) { lowest=_min(lowest,bmsparsed->Cell6Voltage); highest=_max(highest,bmsparsed->Cell6Voltage); }
-    if (bmsparsed->Cell7Voltage>0) { lowest=_min(lowest,bmsparsed->Cell7Voltage); highest=_max(highest,bmsparsed->Cell7Voltage); }
-    if (bmsparsed->Cell8Voltage>0) { lowest=_min(lowest,bmsparsed->Cell8Voltage); highest=_max(highest,bmsparsed->Cell8Voltage); }
-    if (bmsparsed->Cell9Voltage>0) { lowest=_min(lowest,bmsparsed->Cell9Voltage); highest=_max(highest,bmsparsed->Cell9Voltage); }
-    if (bmsparsed->Cell10Voltage>0) { lowest=_min(lowest,bmsparsed->Cell10Voltage); highest=_max(highest,bmsparsed->Cell10Voltage); }
-    #ifdef batt12s
-      if (bmsparsed->Cell11Voltage>0) { lowest=_min(lowest,bmsparsed->Cell11Voltage); highest=_max(highest,bmsparsed->Cell11Voltage); }
-      if (bmsparsed->Cell12Voltage>0) { lowest=_min(lowest,bmsparsed->Cell12Voltage); highest=_max(highest,bmsparsed->Cell12Voltage); }
-    #endif
-
-    //if (bmsparsed->Cell11Voltage>0) { lowest=_min(lowest,bmsparsed->Cell11Voltage); highest=_max(highest,bmsparsed->Cell11Voltage); }
-    //if (bmsparsed->Cell12Voltage>0) { lowest=_min(lowest,bmsparsed->Cell12Voltage); highest=_max(highest,bmsparsed->Cell12Voltage); }
-
+    if (conf_battcells>=1 & bmsparsed->Cell1Voltage>0) { lowest=_min(lowest,bmsparsed->Cell1Voltage); highest=_max(highest,bmsparsed->Cell1Voltage); }
+    if (conf_battcells>=2 & bmsparsed->Cell2Voltage>0) { lowest=_min(lowest,bmsparsed->Cell2Voltage); highest=_max(highest,bmsparsed->Cell2Voltage); }
+    if (conf_battcells>=3 & bmsparsed->Cell3Voltage>0) { lowest=_min(lowest,bmsparsed->Cell3Voltage); highest=_max(highest,bmsparsed->Cell3Voltage); }
+    if (conf_battcells>=4 & bmsparsed->Cell4Voltage>0) { lowest=_min(lowest,bmsparsed->Cell4Voltage); highest=_max(highest,bmsparsed->Cell4Voltage); }
+    if (conf_battcells>=5 & bmsparsed->Cell5Voltage>0) { lowest=_min(lowest,bmsparsed->Cell5Voltage); highest=_max(highest,bmsparsed->Cell5Voltage); }
+    if (conf_battcells>=6 & bmsparsed->Cell6Voltage>0) { lowest=_min(lowest,bmsparsed->Cell6Voltage); highest=_max(highest,bmsparsed->Cell6Voltage); }
+    if (conf_battcells>=7 & bmsparsed->Cell7Voltage>0) { lowest=_min(lowest,bmsparsed->Cell7Voltage); highest=_max(highest,bmsparsed->Cell7Voltage); }
+    if (conf_battcells>=8 & bmsparsed->Cell8Voltage>0) { lowest=_min(lowest,bmsparsed->Cell8Voltage); highest=_max(highest,bmsparsed->Cell8Voltage); }
+    if (conf_battcells>=9 & bmsparsed->Cell9Voltage>0) { lowest=_min(lowest,bmsparsed->Cell9Voltage); highest=_max(highest,bmsparsed->Cell9Voltage); }
+    if (conf_battcells>=10 & bmsparsed->Cell10Voltage>0) { lowest=_min(lowest,bmsparsed->Cell10Voltage); highest=_max(highest,bmsparsed->Cell10Voltage); }
+    if (conf_battcells>=11 & bmsparsed->Cell11Voltage>0) { lowest=_min(lowest,bmsparsed->Cell11Voltage); highest=_max(highest,bmsparsed->Cell11Voltage); }
+    if (conf_battcells>=12 & bmsparsed->Cell12Voltage>0) { lowest=_min(lowest,bmsparsed->Cell12Voltage); highest=_max(highest,bmsparsed->Cell12Voltage); }
 } //m365_updatestats
 
 
@@ -789,7 +783,7 @@ void m365_handlerequests() {
       M365Serial.write((unsigned char*)&request_bms,9);
       requests_sent_bms++;
     } //if address address_bms
-    if (requests[requestindex][0]==address_esc) {
+    if (requests[reque<stindex][0]==address_esc) {
       request_esc[esc_request_offset] = requests[requestindex][1];
       request_esc[esc_request_len] = requests[requestindex][2];
       request_esc[esc_request_throttle] = bleparsed->throttle;
@@ -954,7 +948,7 @@ void m365_receiver() { //recieves data until packet is complete
             packets_crcfail++;
           }
         m365receiverstate = m365receiverready; //reset and wait for next packet
-        if (sbuf[i_address]==0x20 && sbuf[i_hz]==0x65 && sbuf[i_offset]==0x00 ) {
+        if (sbuf[i_address]==0x20 && sbuf[i_hz]==0x65 && sbuf[i_offset]==0x00 && conf_espbusmode) {
           //senddata = true;
           m365_handlerequests();
           DebugSerial.printf("---REQUEST-- %d\r\n",millis());
@@ -1391,12 +1385,13 @@ void handle_wlan() {
       break;
     case wlanturnapon:
         WiFi.disconnect(true);
-        delay(500);
-        WiFi.mode(WIFI_OFF);
-        yield();
+        //delay(500);
+        //WiFi.mode(WIFI_OFF);
+        //yield();
+        WiFi.mode(WIFI_AP);
+        delay(100);
         WiFi.softAP(apssid, appassword);
         yield();
-        WiFi.mode(WIFI_AP);
         yield();
         apnumclientsconnected=0;
         apnumclientsconnectedlast=0;
@@ -1625,13 +1620,11 @@ void handle_led() {
   } //print_states
 #endif
 
-  uint8_t conf_wheelsize;
-  uint8_t conf_battcells;
-  uint8_t conf_alert_batt_celldiff;
-  uint8_t conf_alert_batt_temp;
-  uint8_t conf_alert_esc_temp;
-  bool conf_flashprotect;
-  bool conf_espbusmode;
+
+void applyconfig() {
+  if (conf_wheelsize==0) { wheelfact = wheelfact8; }
+  if (conf_wheelsize==1) { wheelfact = wheelfact10; }
+}
 
 void loadconfig() {
   preferences.begin("espm365config", true); //open in readonly mode
@@ -1641,8 +1634,9 @@ void loadconfig() {
   conf_alert_batt_temp = preferences.getUChar("alertbatttemp", 50); //50° Celsius -> alert
   conf_alert_esc_temp = preferences.getUChar("alertesctemp", 50);  //50° Celsius -> alert
   conf_flashprotect = preferences.getBool("flashprotect",false);
-  conf_espbusmode = preferences.getBool("busmode",false); //false = ESP does not request data, true = ESP requests data
+  conf_espbusmode = preferences.getBool("busmode",true); //false = ESP does not request data, true = ESP requests data
   preferences.end();
+  applyconfig();
 }
 
 void saveconfig() {
@@ -1657,6 +1651,7 @@ void saveconfig() {
   preferences.putBool("busmode",conf_espbusmode); //false = ESP does not request data, true = ESP requests data
   preferences.end();
 }
+
 
 
 #define cms_light 0 //tail ligth on/off
@@ -1746,12 +1741,12 @@ void handle_configmenu() {
                 wlanstate = wlanturnapon;
                 screen = screen_stop;
                 subscreen = 0;
-                if (configchanged) { saveconfig(); }
+                if (configchanged) { saveconfig(); applyconfig(); }
               break;
             case cms_exit:
                 screen = screen_stop;
                 subscreen = 0;
-                if (configchanged) { saveconfig(); }
+                if (configchanged) { saveconfig(); applyconfig(); }
               break;
           } //switch curline
 } //handle_configmenu
@@ -2103,35 +2098,33 @@ void oled_switchscreens() {
             #endif
                 display1.printf("CELL VOLTAGES   (%d/%d)\r\n",subscreen,stopsubscreens);
                 #if !defined useoled2
-                  display1.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f);
-                  display1.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f);
-                  display1.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f);
-                  display1.printf("04: %5.3f  ",(float)bmsparsed->Cell4Voltage/1000.0f);
-                  display1.printf("05: %5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f);
-                  display1.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f);
-                  display1.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f);
-                  display1.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f);
-                  display1.printf("10: %5.3f  ",(float)bmsparsed->Cell10Voltage/1000.0f);
-                  display1.printf("09: %5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f);
-                  #ifdef batt12s
-                    display1.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f);
-                    display1.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f);
-                  #endif
+                  if (conf_battcells>=1) { display1.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
+                  if (conf_battcells>=2) { display1.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
+                  if (conf_battcells>=3) { display1.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
+                  if (conf_battcells>=4) { display1.printf("04: %5.3f  ",(float)bmsparsed->Cell4Voltage/1000.0f); }
+                  if (conf_battcells>=5) { display1.printf("05: %5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
+                  if (conf_battcells>=6) { display1.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
+                  if (conf_battcells>=7) { display1.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
+                  if (conf_battcells>=8) { display1.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
+                  if (conf_battcells>=9) { display1.printf("10: %5.3f  ",(float)bmsparsed->Cell10Voltage/1000.0f); }
+                  if (conf_battcells>=10) { display1.printf("09: %5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                  if (conf_battcells>=11) { display1.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
+                  if (conf_battcells>=12) { display1.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
                   display1.printf("Max. Diff: %5.3f", (float)(highest-lowest)/1000.0f);
                 #else
                   display1.setFont(&FreeSans9pt7b); 
                   display1.setCursor(0,21);
-                  display1.printf("1:%5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f);
-                  display1.printf("2:%5.3f",(float)bmsparsed->Cell2Voltage/1000.0f);
+                  if (conf_battcells>=1) { display1.printf("1:%5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
+                  if (conf_battcells>=2) { display1.printf("2:%5.3f",(float)bmsparsed->Cell2Voltage/1000.0f); }
                   display1.setCursor(0,35);
-                  display1.printf("3:%5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f);
-                  display1.printf("4:%5.3f",(float)bmsparsed->Cell4Voltage/1000.0f);
+                  if (conf_battcells>=3) { display1.printf("3:%5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
+                  if (conf_battcells>=4) { display1.printf("4:%5.3f",(float)bmsparsed->Cell4Voltage/1000.0f); }
                   display1.setCursor(0,49);
-                  display1.printf("5:%5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f);
-                  display1.printf("6:%5.3f",(float)bmsparsed->Cell6Voltage/1000.0f);
+                  if (conf_battcells>=5) { display1.printf("5:%5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
+                  if (conf_battcells>=6) { display1.printf("6:%5.3f",(float)bmsparsed->Cell6Voltage/1000.0f); }
                   display1.setCursor(0,63);
-                  display1.printf("7:%5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f);
-                  display1.printf("8:%5.3f",(float)bmsparsed->Cell8Voltage/1000.0f);
+                  if (conf_battcells>=7) { display1.printf("7:%5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
+                  if (conf_battcells>=8) { display1.printf("8:%5.3f",(float)bmsparsed->Cell8Voltage/1000.0f); }
                 #endif  
               break;
             #if !defined useoled2
@@ -2303,24 +2296,20 @@ void oled_switchscreens() {
               break;
             case 2: //Cell Infos
                 display1.printf("Charging        (%d/2)",subscreen);
-                display1.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f);
-                display1.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f);
-                display1.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f);
-                display1.printf("04: %5.3f  ",(float)bmsparsed->Cell4Voltage/1000.0f);
-                display1.printf("05: %5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f);
-                display1.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f);
-                display1.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f);
-                display1.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f);
-                display1.printf("09: %5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f);
-                display1.printf("10: %5.3f  ",(float)bmsparsed->Cell10Voltage/1000.0f);
-                #ifdef batt12s
-                 display1.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f);
-                 display1.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f);
-                #endif
+                if (conf_battcells>=1) { display1.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
+                if (conf_battcells>=2) { display1.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
+                if (conf_battcells>=3) { display1.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
+                if (conf_battcells>=4) { display1.printf("04: %5.3f  ",(float)bmsparsed->Cell4Voltage/1000.0f); }
+                if (conf_battcells>=5) { display1.printf("05: %5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
+                if (conf_battcells>=6) { display1.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
+                if (conf_battcells>=7) { display1.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
+                if (conf_battcells>=8) { display1.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
+                if (conf_battcells>=9) { display1.printf("09: %5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                if (conf_battcells>=10) { display1.printf("10: %5.3f  ",(float)bmsparsed->Cell10Voltage/1000.0f); }
+                if (conf_battcells>=11) { display1.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
+                if (conf_battcells>=12) { display1.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
                 //display1.printf("Tot: %5.2fV D: %5.3fL: %5.3f H: %5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f,(float)(lowest)/1000.0f,(float)(highest)/1000.0f);
-                #if !defined batt12s
-                  display1.printf("L:  %5.3f H:  %5.3f\r\n", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
-                #endif
+                if (conf_battcells<11) { display1.printf("L:  %5.3f H:  %5.3f\r\n", (float)(lowest)/1000.0f,(float)(highest)/1000.0f); }
                 display1.printf("T:  %5.2f D:  %5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
               break;
           }
@@ -2558,13 +2547,11 @@ void oled_switchscreens() {
             case 3:
                 display2.setFont(&FreeSans9pt7b); 
                 display2.setCursor(0,12);
-                display2.printf("9:%5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f);
-                display2.printf("X:%5.3f",(float)bmsparsed->Cell10Voltage/1000.0f);
-                #ifdef batt12s
-                  display2.setCursor(0,12+14);
-                  display2.printf("1:%5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f);
-                  display2.printf("2:%5.3f",(float)bmsparsed->Cell12Voltage/1000.0f);
-                #endif
+                if (conf_battcells>=9) { display2.printf("9:%5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                if (conf_battcells>=10) { display2.printf("X:%5.3f",(float)bmsparsed->Cell10Voltage/1000.0f); }
+                display2.setCursor(0,12+14);
+                if (conf_battcells>=11) { display2.printf("1:%5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
+                if (conf_battcells>=12) { display2.printf("2:%5.3f",(float)bmsparsed->Cell12Voltage/1000.0f); }
                 display2.setCursor(0,12+14+14);
                 display2.printf("L:%5.3f H:%5.3f", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
                 display2.setCursor(0,12+14+14+14);
@@ -2593,34 +2580,30 @@ void oled_switchscreens() {
     if (screen==screen_charging) {
                 display2.setFont();
                 display2.setCursor(0,0);
-                if (bmsparsed->Cell1Voltage>0) { lowest=_min(lowest,bmsparsed->Cell1Voltage); highest=_max(highest,bmsparsed->Cell1Voltage); }
-                if (bmsparsed->Cell2Voltage>0) { lowest=_min(lowest,bmsparsed->Cell2Voltage); highest=_max(highest,bmsparsed->Cell2Voltage); }
-                if (bmsparsed->Cell3Voltage>0) { lowest=_min(lowest,bmsparsed->Cell3Voltage); highest=_max(highest,bmsparsed->Cell3Voltage); }
-                if (bmsparsed->Cell4Voltage>0) { lowest=_min(lowest,bmsparsed->Cell4Voltage); highest=_max(highest,bmsparsed->Cell4Voltage); }
-                if (bmsparsed->Cell5Voltage>0) { lowest=_min(lowest,bmsparsed->Cell5Voltage); highest=_max(highest,bmsparsed->Cell5Voltage); }
-                if (bmsparsed->Cell6Voltage>0) { lowest=_min(lowest,bmsparsed->Cell6Voltage); highest=_max(highest,bmsparsed->Cell6Voltage); }
-                if (bmsparsed->Cell7Voltage>0) { lowest=_min(lowest,bmsparsed->Cell7Voltage); highest=_max(highest,bmsparsed->Cell7Voltage); }
-                if (bmsparsed->Cell8Voltage>0) { lowest=_min(lowest,bmsparsed->Cell8Voltage); highest=_max(highest,bmsparsed->Cell8Voltage); }
-                if (bmsparsed->Cell9Voltage>0) { lowest=_min(lowest,bmsparsed->Cell9Voltage); highest=_max(highest,bmsparsed->Cell9Voltage); }
-                if (bmsparsed->Cell10Voltage>0) { lowest=_min(lowest,bmsparsed->Cell10Voltage); highest=_max(highest,bmsparsed->Cell10Voltage); }
-                #ifdef batt12s
-                  if (bmsparsed->Cell11Voltage>0) { lowest=_min(lowest,bmsparsed->Cell11Voltage); highest=_max(highest,bmsparsed->Cell11Voltage); }
-                  if (bmsparsed->Cell12Voltage>0) { lowest=_min(lowest,bmsparsed->Cell12Voltage); highest=_max(highest,bmsparsed->Cell12Voltage); }
-                #endif
-                display2.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f);
-                display2.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f);
-                display2.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f);
-                display2.printf("04: %5.3f  ",(float)bmsparsed->Cell4Voltage/1000.0f);
-                display2.printf("05: %5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f);
-                display2.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f);
-                display2.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f);
-                display2.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f);
-                display2.printf("09: %5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f);
-                display2.printf("10: %5.3f  ",(float)bmsparsed->Cell10Voltage/1000.0f);
-                #ifdef batt12s
-                  display2.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f);
-                  display2.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f);
-                #endif
+                if (conf_battcells>=1 & bmsparsed->Cell1Voltage>0) { lowest=_min(lowest,bmsparsed->Cell1Voltage); highest=_max(highest,bmsparsed->Cell1Voltage); }
+                if (conf_battcells>=2 & bmsparsed->Cell2Voltage>0) { lowest=_min(lowest,bmsparsed->Cell2Voltage); highest=_max(highest,bmsparsed->Cell2Voltage); }
+                if (conf_battcells>=3 & bmsparsed->Cell3Voltage>0) { lowest=_min(lowest,bmsparsed->Cell3Voltage); highest=_max(highest,bmsparsed->Cell3Voltage); }
+                if (conf_battcells>=4 & bmsparsed->Cell4Voltage>0) { lowest=_min(lowest,bmsparsed->Cell4Voltage); highest=_max(highest,bmsparsed->Cell4Voltage); }
+                if (conf_battcells>=5 & bmsparsed->Cell5Voltage>0) { lowest=_min(lowest,bmsparsed->Cell5Voltage); highest=_max(highest,bmsparsed->Cell5Voltage); }
+                if (conf_battcells>=6 & bmsparsed->Cell6Voltage>0) { lowest=_min(lowest,bmsparsed->Cell6Voltage); highest=_max(highest,bmsparsed->Cell6Voltage); }
+                if (conf_battcells>=7 & bmsparsed->Cell7Voltage>0) { lowest=_min(lowest,bmsparsed->Cell7Voltage); highest=_max(highest,bmsparsed->Cell7Voltage); }
+                if (conf_battcells>=8 & bmsparsed->Cell8Voltage>0) { lowest=_min(lowest,bmsparsed->Cell8Voltage); highest=_max(highest,bmsparsed->Cell8Voltage); }
+                if (conf_battcells>=9 & bmsparsed->Cell9Voltage>0) { lowest=_min(lowest,bmsparsed->Cell9Voltage); highest=_max(highest,bmsparsed->Cell9Voltage); }
+                if (conf_battcells>=10 & bmsparsed->Cell10Voltage>0) { lowest=_min(lowest,bmsparsed->Cell10Voltage); highest=_max(highest,bmsparsed->Cell10Voltage); }
+                if (conf_battcells>=11 & bmsparsed->Cell11Voltage>0) { lowest=_min(lowest,bmsparsed->Cell11Voltage); highest=_max(highest,bmsparsed->Cell11Voltage); }
+                if (conf_battcells>=12 & bmsparsed->Cell12Voltage>0) { lowest=_min(lowest,bmsparsed->Cell12Voltage); highest=_max(highest,bmsparsed->Cell12Voltage); }
+                if (conf_battcells>=1) { display2.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
+                if (conf_battcells>=2) { display2.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
+                if (conf_battcells>=3) { display2.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
+                if (conf_battcells>=4) { display2.printf("04: %5.3f  ",(float)bmsparsed->Cell4Voltage/1000.0f); }
+                if (conf_battcells>=5) { display2.printf("05: %5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
+                if (conf_battcells>=6) { display2.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
+                if (conf_battcells>=7) { display2.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
+                if (conf_battcells>=8) { display2.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
+                if (conf_battcells>=9) { display2.printf("09: %5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                if (conf_battcells>=10) { display2.printf("10: %5.3f  ",(float)bmsparsed->Cell10Voltage/1000.0f); }
+                if (conf_battcells>=11) { display2.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
+                if (conf_battcells>=12) { display2.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
                 //display2.printf("Tot: %5.2fV D: %5.3fL: %5.3f H: %5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f,(float)(lowest)/1000.0f,(float)(highest)/1000.0f);
                 display2.printf("L:  %5.3f H:  %5.3f\r\n", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
                 display2.printf("T:  %5.2f D:  %5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
