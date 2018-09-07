@@ -683,6 +683,22 @@
   #define wheelfact8 1.0f
   float wheelfact = 0;
 
+//housekeeper (manages alerts,...)
+  uint8_t hkstate = 0;
+  uint8_t hkstateold = 0;
+  #define hkwaiting 0
+  #define hkrequesting 1
+  #define hkevaluating 2
+
+  #define housekeepertimeout 300000 //duration between housekeeper-datarequests
+  unsigned long housekeepertimestamp = housekeepertimeout;
+
+//alert states
+  bool alert_cellvoltage = false;
+  bool alert_bmstemp = false;
+  bool alert_esctemp = false;
+
+
 
 void reset_statistics() {
   packets_rec=0;
@@ -719,6 +735,24 @@ void start_m365() {
   reset_statistics();
 }  //startm365
 
+void m365_updatebattstats() {
+  //Cell Voltages
+    highest = 0;
+    lowest =10000;
+    if (conf_battcells>=1 & bmsparsed->Cell1Voltage>0) { lowest=_min(lowest,bmsparsed->Cell1Voltage); highest=_max(highest,bmsparsed->Cell1Voltage); }
+    if (conf_battcells>=2 & bmsparsed->Cell2Voltage>0) { lowest=_min(lowest,bmsparsed->Cell2Voltage); highest=_max(highest,bmsparsed->Cell2Voltage); }
+    if (conf_battcells>=3 & bmsparsed->Cell3Voltage>0) { lowest=_min(lowest,bmsparsed->Cell3Voltage); highest=_max(highest,bmsparsed->Cell3Voltage); }
+    if (conf_battcells>=4 & bmsparsed->Cell4Voltage>0) { lowest=_min(lowest,bmsparsed->Cell4Voltage); highest=_max(highest,bmsparsed->Cell4Voltage); }
+    if (conf_battcells>=5 & bmsparsed->Cell5Voltage>0) { lowest=_min(lowest,bmsparsed->Cell5Voltage); highest=_max(highest,bmsparsed->Cell5Voltage); }
+    if (conf_battcells>=6 & bmsparsed->Cell6Voltage>0) { lowest=_min(lowest,bmsparsed->Cell6Voltage); highest=_max(highest,bmsparsed->Cell6Voltage); }
+    if (conf_battcells>=7 & bmsparsed->Cell7Voltage>0) { lowest=_min(lowest,bmsparsed->Cell7Voltage); highest=_max(highest,bmsparsed->Cell7Voltage); }
+    if (conf_battcells>=8 & bmsparsed->Cell8Voltage>0) { lowest=_min(lowest,bmsparsed->Cell8Voltage); highest=_max(highest,bmsparsed->Cell8Voltage); }
+    if (conf_battcells>=9 & bmsparsed->Cell9Voltage>0) { lowest=_min(lowest,bmsparsed->Cell9Voltage); highest=_max(highest,bmsparsed->Cell9Voltage); }
+    if (conf_battcells>=10 & bmsparsed->Cell10Voltage>0) { lowest=_min(lowest,bmsparsed->Cell10Voltage); highest=_max(highest,bmsparsed->Cell10Voltage); }
+    if (conf_battcells>=11 & bmsparsed->Cell11Voltage>0) { lowest=_min(lowest,bmsparsed->Cell11Voltage); highest=_max(highest,bmsparsed->Cell11Voltage); }
+    if (conf_battcells>=12 & bmsparsed->Cell12Voltage>0) { lowest=_min(lowest,bmsparsed->Cell12Voltage); highest=_max(highest,bmsparsed->Cell12Voltage); }
+}
+
 void m365_updatestats() {
   //Trip
     if (speed_min>escparsed->speed) { speed_min = escparsed->speed; }
@@ -735,22 +769,52 @@ void m365_updatestats() {
     if (tb2_max<bmsparsed->temperature[1]) { tb2_max = bmsparsed->temperature[1]; }
     if (te_min>escparsed->frametemp2 | te_min==0) { te_min = escparsed->frametemp2; }
     if (te_max<escparsed->frametemp2) { te_max = escparsed->frametemp2; }
-  //Cell Voltages
-    highest = 0;
-    lowest =10000;
-    if (conf_battcells>=1 & bmsparsed->Cell1Voltage>0) { lowest=_min(lowest,bmsparsed->Cell1Voltage); highest=_max(highest,bmsparsed->Cell1Voltage); }
-    if (conf_battcells>=2 & bmsparsed->Cell2Voltage>0) { lowest=_min(lowest,bmsparsed->Cell2Voltage); highest=_max(highest,bmsparsed->Cell2Voltage); }
-    if (conf_battcells>=3 & bmsparsed->Cell3Voltage>0) { lowest=_min(lowest,bmsparsed->Cell3Voltage); highest=_max(highest,bmsparsed->Cell3Voltage); }
-    if (conf_battcells>=4 & bmsparsed->Cell4Voltage>0) { lowest=_min(lowest,bmsparsed->Cell4Voltage); highest=_max(highest,bmsparsed->Cell4Voltage); }
-    if (conf_battcells>=5 & bmsparsed->Cell5Voltage>0) { lowest=_min(lowest,bmsparsed->Cell5Voltage); highest=_max(highest,bmsparsed->Cell5Voltage); }
-    if (conf_battcells>=6 & bmsparsed->Cell6Voltage>0) { lowest=_min(lowest,bmsparsed->Cell6Voltage); highest=_max(highest,bmsparsed->Cell6Voltage); }
-    if (conf_battcells>=7 & bmsparsed->Cell7Voltage>0) { lowest=_min(lowest,bmsparsed->Cell7Voltage); highest=_max(highest,bmsparsed->Cell7Voltage); }
-    if (conf_battcells>=8 & bmsparsed->Cell8Voltage>0) { lowest=_min(lowest,bmsparsed->Cell8Voltage); highest=_max(highest,bmsparsed->Cell8Voltage); }
-    if (conf_battcells>=9 & bmsparsed->Cell9Voltage>0) { lowest=_min(lowest,bmsparsed->Cell9Voltage); highest=_max(highest,bmsparsed->Cell9Voltage); }
-    if (conf_battcells>=10 & bmsparsed->Cell10Voltage>0) { lowest=_min(lowest,bmsparsed->Cell10Voltage); highest=_max(highest,bmsparsed->Cell10Voltage); }
-    if (conf_battcells>=11 & bmsparsed->Cell11Voltage>0) { lowest=_min(lowest,bmsparsed->Cell11Voltage); highest=_max(highest,bmsparsed->Cell11Voltage); }
-    if (conf_battcells>=12 & bmsparsed->Cell12Voltage>0) { lowest=_min(lowest,bmsparsed->Cell12Voltage); highest=_max(highest,bmsparsed->Cell12Voltage); }
+  m365_updatebattstats();
 } //m365_updatestats
+
+void handle_housekeeper() {
+  if (hkstate!=hkstateold) {
+    hkstateold=hkstate;
+    #ifdef debug_dump_states
+      Serial.printf("### HKSTATE %d -> %d\r\n",hkstateold,hkstate);
+      print_states();
+    #endif
+  }
+  switch(hkstate) {
+    case hkwaiting: //check timeout, if over request data
+        if (millis()>housekeepertimestamp) {
+          hkstate = hkrequesting;
+          //set requestor stuff
+        }
+      break;
+    case hkrequesting: //waiting until we received data...
+    break;
+  case hkevaluating: //evaluate alarms,... rearm timeout
+    //cell voltage difference alarm:
+      m365_updatebattstats();
+      if ((highest-lowest)*100 >= conf_alert_batt_celldiff) {
+        alert_cellvoltage = true;
+      } else {
+        alert_cellvoltage = false;
+      }
+    //bms temp alarm
+      if (((bmsparsed->temperature[1]-20) >=conf_alert_batt_temp) | ((bmsparsed->temperature[2]-20) >= conf_alert_batt_temp)) {
+        alert_bmstemp = true;
+      } else {
+        alert_bmstemp = false;
+      }
+    //esc temp alarm
+      if (((float)escparsed->frametemp2/10.0f) >= (float)conf_alert_esc_temp) {
+        alert_esctemp = true;
+      } else {
+        alert_esctemp = false;
+      }
+    //last step: rearm
+      housekeepertimestamp = millis() + housekeepertimeout;
+      hkstate = hkwaiting;
+    break;
+  } //switch hkstate
+} //handle_housekeeper
 
 
 void m365_handlerequests() {
@@ -783,7 +847,7 @@ void m365_handlerequests() {
       M365Serial.write((unsigned char*)&request_bms,9);
       requests_sent_bms++;
     } //if address address_bms
-    if (requests[reque<stindex][0]==address_esc) {
+    if (requests[requestindex][0]==address_esc) {
       request_esc[esc_request_offset] = requests[requestindex][1];
       request_esc[esc_request_len] = requests[requestindex][2];
       request_esc[esc_request_throttle] = bleparsed->throttle;
@@ -1716,10 +1780,11 @@ void handle_configmenu() {
               break;
             case cms_bac:
                 switch (conf_alert_batt_celldiff) {
-                  case 30: conf_alert_batt_celldiff=50; break;
-                  case 50: conf_alert_batt_celldiff=100; break;
-                  case 100: conf_alert_batt_celldiff=200; break;
-                  case 200: conf_alert_batt_celldiff=30; break;
+                  case 3: conf_alert_batt_celldiff=5; break;
+                  case 5: conf_alert_batt_celldiff=10; break;
+                  case 10: conf_alert_batt_celldiff=20; break;
+                  case 20: conf_alert_batt_celldiff=50; break;
+                  case 50: conf_alert_batt_celldiff=3; break;
                 }
                 configchanged = true;
               break;
@@ -2238,7 +2303,7 @@ void oled_switchscreens() {
               break;
             case cms_bc: display1.printf("Battery: %d Cells", conf_battcells);
               break;
-            case cms_bac: display1.printf("Battery Alert: %dmV", conf_alert_batt_celldiff);
+            case cms_bac: display1.printf("Battery Alert: %d0mV", conf_alert_batt_celldiff);
 
               break;
             case cms_bat: display1.printf("Batt Temp Alert: %d C", conf_alert_batt_temp);
@@ -2580,7 +2645,7 @@ void oled_switchscreens() {
     if (screen==screen_charging) {
                 display2.setFont();
                 display2.setCursor(0,0);
-                if (conf_battcells>=1 & bmsparsed->Cell1Voltage>0) { lowest=_min(lowest,bmsparsed->Cell1Voltage); highest=_max(highest,bmsparsed->Cell1Voltage); }
+                /*if (conf_battcells>=1 & bmsparsed->Cell1Voltage>0) { lowest=_min(lowest,bmsparsed->Cell1Voltage); highest=_max(highest,bmsparsed->Cell1Voltage); }
                 if (conf_battcells>=2 & bmsparsed->Cell2Voltage>0) { lowest=_min(lowest,bmsparsed->Cell2Voltage); highest=_max(highest,bmsparsed->Cell2Voltage); }
                 if (conf_battcells>=3 & bmsparsed->Cell3Voltage>0) { lowest=_min(lowest,bmsparsed->Cell3Voltage); highest=_max(highest,bmsparsed->Cell3Voltage); }
                 if (conf_battcells>=4 & bmsparsed->Cell4Voltage>0) { lowest=_min(lowest,bmsparsed->Cell4Voltage); highest=_max(highest,bmsparsed->Cell4Voltage); }
@@ -2592,6 +2657,7 @@ void oled_switchscreens() {
                 if (conf_battcells>=10 & bmsparsed->Cell10Voltage>0) { lowest=_min(lowest,bmsparsed->Cell10Voltage); highest=_max(highest,bmsparsed->Cell10Voltage); }
                 if (conf_battcells>=11 & bmsparsed->Cell11Voltage>0) { lowest=_min(lowest,bmsparsed->Cell11Voltage); highest=_max(highest,bmsparsed->Cell11Voltage); }
                 if (conf_battcells>=12 & bmsparsed->Cell12Voltage>0) { lowest=_min(lowest,bmsparsed->Cell12Voltage); highest=_max(highest,bmsparsed->Cell12Voltage); }
+                */
                 if (conf_battcells>=1) { display2.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
                 if (conf_battcells>=2) { display2.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
                 if (conf_battcells>=3) { display2.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
