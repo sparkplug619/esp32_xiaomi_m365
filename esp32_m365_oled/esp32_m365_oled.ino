@@ -4,18 +4,33 @@
 //needs patch in esp32-arduino-core/esp32-hal-uart.c -> see comments in uart-section below and patch yourself or use https://github.com/smartinick/arduino-esp32
 //needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer) -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
 
-//fix ssid/passphrase in AP Mode is not used
+/* known BUGS: 
+  - apssid/appassword not applied when switching from client-mode/search to AP
+  - does not receive/decode all data after doing OTA, reboot once and it works
+
+
 //make use of config variables flashprotect / test if needed at all
-//add display popup/alerts
-//display alerts....
 //add alertcounter, count alert-toggles and add counter to display/telnet
-//fix timing/crc issues
-//add trip computer
-//add mqtt logging
+//verfify if kers/light/cruisemode runs
 
 //check if ESC Array - LOCK STATE = 0xb2 len 02 ??? -> add to telnet, oled and make "LOCKED" state (lock via menu, unlock via secrect brake/gas)
 
+//new font
+//menu formating
+//add display popup/alerts (rectangle over content,...)
+//display alerts....
 
+//add 2nd git repo (nas3)
+
+//fix timing/crc issues
+//add trip computer
+//add mqtt logging
+//add komoot code for testing nav on oled
+/*
+SHOW PASSIVE MODE ON STOP/STATUS SCREEN/ASSETS SCREEN
+SHOW LOCKED STATE (if it's detected...)
+add housekepper-cyclenum to telnet statistics screen
+*/
 #ifdef ESP32
   #include <WiFi.h>
   #include <WiFiUdp.h>
@@ -35,7 +50,7 @@
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.09.07"
+#define swversion "18.09.09"
 
 //scooter config
   //Info: batt12s and wheelsize have been removed --> implemented via configmenu, default 10s batt and 8.5" wheel
@@ -47,7 +62,7 @@
   #define OLED1_ROTATION 2 //0 = normal, 1= 90, 2=180, 3=270° CW
 
 
-  //#define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
+  #define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
 
   #ifdef developermode
     //detailed config
@@ -166,13 +181,13 @@
     //software spi
     //Adafruit_SSD1306 display1(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS);
     //hardware spi with patched Adafruit_SSD1306 Library:
-    Adafruit_SSD1306 display1(OLED_MISO, OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS, 2000000UL);
+    Adafruit_SSD1306 display1(OLED_MISO, OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS, 4000000UL);
 #endif
 #if (!defined usei2c && defined useoled2)
     //software spi
     //Adafruit_SSD1306 display2(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED2_CS);
     //hardware spi
-    Adafruit_SSD1306 display2(OLED_MISO, OLED_MOSI, OLED_CLK, OLED_DC, OLED2_RESET, OLED2_CS, 2000000UL);
+    Adafruit_SSD1306 display2(OLED_MISO, OLED_MOSI, OLED_CLK, OLED_DC, OLED2_RESET, OLED2_CS, 4000000UL);
 #endif
 
 #if (defined useoled1 || defined useoled2)
@@ -420,6 +435,7 @@
   uint16_t requests_sent_bms=0;
   uint16_t requests_sent_esc=0;
   uint16_t commands_sent=0;
+  uint16_t requests_sent_housekeeper=0;
 
   int16_t speed_min = 0;
   int16_t speed_max = 0;
@@ -690,12 +706,12 @@
   unsigned long timestamp_oledstart=0;
   unsigned long duration_oled1draw=0;
   unsigned long timestamp_oled1draw=0;
-  unsigned long duration_oled1i2c=0;
-  unsigned long timestamp_oled1i2c=0;
+  unsigned long duration_oled1transfer=0;
+  unsigned long timestamp_oled1transfer=0;
   unsigned long duration_oled2draw=0;
   unsigned long timestamp_oled2draw=0;
-  unsigned long duration_oled2i2c=0;
-  unsigned long timestamp_oled2i2c=0;
+  unsigned long duration_oled2transfer=0;
+  unsigned long timestamp_oled2transfer=0;
   unsigned long duration_telnet=0;
   unsigned long timestamp_telnetstart=0;
 
@@ -725,7 +741,7 @@
   #define hkrequesting 1
   #define hkevaluating 2
 
-  #define housekeepertimeout 300000 //duration between housekeeper-datarequests
+  #define housekeepertimeout 3000 //duration between housekeeper-datarequests
   unsigned long housekeepertimestamp = housekeepertimeout;
 
 //alert states
@@ -820,6 +836,7 @@ void handle_housekeeper() {
         if (millis()>housekeepertimestamp) {
           hkstate = hkrequesting;
           hkrequestindex = 0; //start new hk requestcycle
+          requests_sent_housekeeper++;
           //set requestor stuff
         }
       break;
@@ -834,7 +851,7 @@ void handle_housekeeper() {
         alert_cellvoltage = false;
       }
     //bms temp alarm
-      if (((bmsparsed->temperature[1]-20) >=conf_alert_batt_temp) | ((bmsparsed->temperature[2]-20) >= conf_alert_batt_temp)) {
+      if (((bmsparsed->temperature[1]-20) >=conf_alert_batt_temp) | ((bmsparsed->temperature[0]-20) >= conf_alert_batt_temp)) {
         alert_bmstemp = true;
       } else {
         alert_bmstemp = false;
@@ -912,7 +929,7 @@ void m365_handlerequests() {
           case cmd_light_on: m365_sendcommand(0x7d,2,0); break;
           case cmd_light_off: m365_sendcommand(0x7d,0,0); break;
           case cmd_turnoff: m365_sendcommand(0x79,01,0); break;
-          case cmd_lock: m365_sendcommand(0x70,01,0); break; //maybe swap par1 & 2?
+          case cmd_lock: m365_sendcommand(0x70,01,0); break;
           case cmd_unlock: m365_sendcommand(0x71,01,0); break;
         } //switch sendcommand
     sendcommand = cmd_none; //reset  
@@ -1186,6 +1203,7 @@ void telnet_refreshscreen() {
                 telnetclient.printf(" Charging Cycles: %d Charging Times: %d\r\n",bmsparsed->cycles,bmsparsed->chargingtimes);
                 telnetclient.printf(" Voltage: %2.2f V Current %05d mA\r\n",(float)bmsparsed->voltage/100.0f, bmsparsed->current);
                 telnetclient.printf(" C1: %1.3f C2: %1.3f C3: %1.3f C4: %1.3f C5: %1.3f C6: %1.3f C7: %1.3f C8: %1.3f C9: %1.3f C10: %1.3f\r\n",(float)bmsparsed->Cell1Voltage/1000.0f,(float)bmsparsed->Cell2Voltage/1000.0f,(float)bmsparsed->Cell3Voltage/1000.0f,(float)bmsparsed->Cell4Voltage/1000.0f,(float)bmsparsed->Cell5Voltage/1000.0f,(float)bmsparsed->Cell6Voltage/1000.0f,(float)bmsparsed->Cell7Voltage/1000.0f,(float)bmsparsed->Cell8Voltage/1000.0f,(float)bmsparsed->Cell9Voltage/1000.0f,(float)bmsparsed->Cell10Voltage/1000.0f);
+                telnetclient.printf(" Highest: %1.3f Lowest: %1.3f Difference: %1.3f\r\n",(float)highest/1000.0f, (float)lowest/1000.0f, (float)(highest-lowest)/1000.0f); 
                 sprintf(tmp1,"%c%c%c%c%c%c%c%c%c%c%c%c%c%c",escparsed->serial[0],escparsed->serial[1],escparsed->serial[2],escparsed->serial[3],escparsed->serial[4],escparsed->serial[5],escparsed->serial[6],escparsed->serial[7],escparsed->serial[8],escparsed->serial[9],escparsed->serial[10],escparsed->serial[11],escparsed->serial[12],escparsed->serial[13]);
                 telnetclient.printf("\r\n\r\nESC Serial: %s Version: %x.%x.%x\r\n", tmp1,escparsed->fwversion[1],(escparsed->fwversion[0]&0xf0)>>4,escparsed->fwversion[0]&0x0f);
                 sprintf(tmp1,"%c%c%c%c%c%c",escparsed->pin[0],escparsed->pin[1],escparsed->pin[2],escparsed->pin[3],escparsed->pin[4],escparsed->pin[5]);
@@ -1207,13 +1225,42 @@ void telnet_refreshscreen() {
             break;
           case ts_statistics:
               telnetclient.printf("Requests Sent:\r\n  ESC: %05d   BMS: %05d   Total: %05d\r\n", requests_sent_esc, requests_sent_bms, requests_sent_bms+requests_sent_esc);
-              telnetclient.printf("Commands Sent: %05d\r\n", commands_sent);
+              telnetclient.printf("Commands Sent: %05d   HK-Cycles: %05d\r\n", commands_sent, requests_sent_housekeeper);
               telnetclient.printf("Packets Received:\r\n  ESC: %05d   BMS: %05d   BLE: %05d   X1: %05d   unhandled: %05d\r\n", packets_rec_esc,packets_rec_bms,packets_rec_ble,packets_rec_x1,packets_rec_unhandled);
               telnetclient.printf("  CRC OK: %05d   CRC FAIL: %05d\r\n   Total: %05d\r\n",packets_crcok,packets_crcfail,packets_rec);
+              telnetclient.printf("\r\nALARM States:\r\n  Cellvoltage Differnce (Is: %d mV, Alert: %d0 mV): %s\r\n",highest-lowest, conf_alert_batt_celldiff, alert_cellvoltage ? "true" : "false");
+              telnetclient.printf("  BMS Temperature (Is: %d °C %d °C, Alert: %d °C): %s\r\n",bmsparsed->temperature[1]-20, bmsparsed->temperature[0]-20,conf_alert_batt_temp, alert_bmstemp ? "true" : "false");
+              telnetclient.printf("  ESC Temperarture (Is: %3.1f °C, Alert: %d °C): %s\r\n",(float)escparsed->frametemp2/10.0f, conf_alert_esc_temp, alert_esctemp ? "true" : "false");
+/*                    m365_updatebattstats();
+      if ((highest-lowest)*100 >= conf_alert_batt_celldiff) {
+        alert_cellvoltage = true;
+      } else {
+        alert_cellvoltage = false;
+      }
+    //bms temp alarm
+      if (((bmsparsed->temperature[1]-20) >=conf_alert_batt_temp) | ((bmsparsed->temperature[2]-20) >= conf_alert_batt_temp)) {
+        alert_bmstemp = true;
+      } else {
+        alert_bmstemp = false;
+      }
+    //esc temp alarm
+      if (((float)escparsed->frametemp2/10.0f) >= (float)conf_alert_esc_temp) {
+        alert_esctemp = true;
+      } else {
+        alert_esctemp = false;
+      }
+    //last step: rearm
+      housekeepertimestamp = millis() + housekeepertimeout;
+      hkstate = hkwaiting;
+    break;
+              bool alert_cellvoltage = false;
+  bool alert_bmstemp = false;
+  bool alert_esctemp = false;
+*/
               telnetclient.printf("\r\nTimers:\r\n  Main:   %04.3f ms\r\n  Telnet: %04.3f ms\r\n",(float)duration_mainloop/1000.0f, (float)duration_telnet/1000.0f);
               telnetclient.printf("  OLED Main: %04.3f ms\r\n",(float)duration_oled/1000.0f);
-              telnetclient.printf("  OLED1 Draw: %04.3f ms\r\n  OLED1 I2C:  %04.3f ms\r\n",(float)duration_oled1draw/1000.0f,(float)duration_oled1i2c/1000.0f);
-              telnetclient.printf("  OLED2 Draw: %04.3f ms\r\n  OLED2 I2C:  %04.3f ms\r\n",(float)duration_oled2draw/1000.0f,(float)duration_oled2i2c/1000.0f);
+              telnetclient.printf("  OLED1 Draw: %04.3f ms\r\n  OLED1 Transfer:  %04.3f ms\r\n",(float)duration_oled1draw/1000.0f,(float)duration_oled1transfer/1000.0f);
+              telnetclient.printf("  OLED2 Draw: %04.3f ms\r\n  OLED2 Transfer:  %04.3f ms\r\n",(float)duration_oled2draw/1000.0f,(float)duration_oled2transfer/1000.0f);
               telnetclient.printf("  Request Cycle Loop: %04d ms\r\n  Request last Index: %03d\r\n", duration_requestcycle,requestindex);
               telnetclient.printf("  Time since last Packet: %05d ms\r\n",m365packetlasttimestamp);
               telnetclient.printf("\r\nPackets per device Address:\r\n");
@@ -1800,7 +1847,7 @@ void loadconfig() {
   preferences.begin("espm365config", true); //open in readonly mode
   conf_wheelsize = preferences.getUChar("wheelsize", 0); //0=8.5", 1=10"
   conf_battcells = preferences.getUChar("battcells", 10); //10 = 10S, 12 = 12S
-  conf_alert_batt_celldiff = preferences.getUChar("alertcelldiff", 50); //50mV difference -> alert
+  conf_alert_batt_celldiff = preferences.getUChar("alertcelldiff", 5); //50mV difference -> alert
   conf_alert_batt_temp = preferences.getUChar("alertbatttemp", 50); //50° Celsius -> alert
   conf_alert_esc_temp = preferences.getUChar("alertesctemp", 50);  //50° Celsius -> alert
   conf_flashprotect = preferences.getBool("flashprotect",false);
@@ -1827,19 +1874,19 @@ void saveconfig() {
 #define cms_light 0 //tail ligth on/off
 #define cms_cruise 1 //cruise mode on/off
 #define cms_kers 2 //set kers
-#define cms_ws 3 //set wheelsize
-#define cms_bc 4 //set number of cells (10/12s)
-#define cms_bac 5 //set Battery Alert CellVoltage Difference
-#define cms_bat 6 //set Battery Alert Temperature
-#define cms_eat 7 //set ESC Alert Temperature
-#define cms_flashprotection 8 //activate flashprotection
-#define cms_blekomoot 9 //activate ble/komoot navigaton display
-#define cms_busmode 10 //busmode active/passive (request data from m365 or not...?)
-#define cms_wifirestart 11 //restart wifi
-#define cms_lock 12
-#define cms_unlock 13
-#define cms_turnoff 14
-#define cms_exit 15 //exitmenu
+#define cms_ws 3 //set wheelsize //WORKING
+#define cms_bc 4 //set number of cells (10/12s) //WORKING
+#define cms_bac 5 //set Battery Alert CellVoltage Difference //WORKING
+#define cms_bat 6 //set Battery Alert Temperature //NOT IMPLEMENTED
+#define cms_eat 7 //set ESC Alert Temperature //NOT IMPLEMENTED
+#define cms_flashprotection 8 //activate flashprotection //NOT IMPLEMENTED
+#define cms_blekomoot 9 //activate ble/komoot navigaton display //NOT IMPLEMENTED
+#define cms_busmode 10 //busmode active/passive (request data from m365 or not...?) //WORKING
+#define cms_wifirestart 11 //restart wifi //WORKING
+#define cms_lock 12 //WORKING
+#define cms_unlock 13 //WORKING
+#define cms_turnoff 14 //WORKING
+#define cms_exit 15 //exitmenu //WORKING
 #define configsubscreens 16
 #define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
 #define configlinesabove 2
@@ -1888,11 +1935,13 @@ void handle_configmenu() {
               break;
             case cms_bac:
                 switch (conf_alert_batt_celldiff) {
+                  case 1: conf_alert_batt_celldiff=3; break;
                   case 3: conf_alert_batt_celldiff=5; break;
                   case 5: conf_alert_batt_celldiff=10; break;
                   case 10: conf_alert_batt_celldiff=20; break;
                   case 20: conf_alert_batt_celldiff=50; break;
-                  case 50: conf_alert_batt_celldiff=3; break;
+                  case 50: conf_alert_batt_celldiff=1; break;
+                  default: conf_alert_batt_celldiff=5; break;
                 }
                 configchanged = true;
               break;
@@ -1911,7 +1960,7 @@ void handle_configmenu() {
                 configchanged = true;
               break;
             case cms_wifirestart:
-                wlanstate = wlanturnapon;
+                wlanstate = wlanturnstaon;
                 screen = screen_stop;
                 subscreen = 0;
                 if (configchanged) { saveconfig(); applyconfig(); }
@@ -2117,8 +2166,6 @@ void oled_switchscreens() {
 #ifdef useoled1
   void oled1_update() {
     uint8_t line;
-    lowest=10000;
-    highest=0;
     timestamp_oled1draw=micros();
     display1.clearDisplay();
     
@@ -2572,16 +2619,17 @@ void oled_switchscreens() {
           display1.setFont(&FreeSans9pt7b); 
           if (x1parsed->light==0x64) { 
             //display1.setFont();
-            display1.setCursor(110,20);
+            display1.setCursor(100,20);
             display1.print("L");
           }
+          /*
         //NORMAL/ECO MODE
           display1.setCursor(120,20);
           if (x1parsed->mode<2) { 
             display1.print("N"); //normal mode
           } else {
             display1.print("E"); //eco mode
-          }
+          }*/
         //WLAN STATUS
           //display1.setFont();
           display1.setCursor(110,fontsmallheight<<1);
@@ -2623,9 +2671,9 @@ void oled_switchscreens() {
         }
 
     duration_oled1draw = micros()-timestamp_oled1draw;
-    timestamp_oled1i2c=micros();
+    timestamp_oled1transfer=micros();
     display1.display();
-    duration_oled1i2c = micros()-timestamp_oled1i2c;
+    duration_oled1transfer = micros()-timestamp_oled1transfer;
     #ifdef useoled2
       updatescreen2 = true;
     #endif
@@ -2839,9 +2887,9 @@ void oled_switchscreens() {
     }
 
     duration_oled2draw = micros()-timestamp_oled2draw;
-    timestamp_oled2i2c=micros();
+    timestamp_oled2transfer=micros();
     display2.display();
-    duration_oled2i2c = micros()-timestamp_oled2i2c;
+    duration_oled2transfer = micros()-timestamp_oled2transfer;
   } //oled2_update
 #endif
 
@@ -3061,6 +3109,7 @@ void loop() {
   }
   if (newdata) {
     m365_updatestats();
+    handle_housekeeper();
   }
   //m365_detectapp(); //detect if smartphone is connected and requests data, so we stay quiet
   #ifdef useoled1
