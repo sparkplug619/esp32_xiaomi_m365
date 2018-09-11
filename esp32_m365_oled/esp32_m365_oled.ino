@@ -5,32 +5,25 @@
 //needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer) -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
 
 /* known BUGS: 
-  - apssid/appassword not applied when switching from client-mode/search to AP
-  - does not receive/decode all data after doing OTA, reboot once and it works
+ * - apssid/appassword not applied when switching from client-mode/search to AP
+ * - does not receive/decode all data after doing OTA, reboot once and it works
+ */
 
-
-//make use of config variables flashprotect / test if needed at all
-//add alertcounter, count alert-toggles and add counter to display/telnet
-//verfify if kers/light/cruisemode runs
-
-//check if ESC Array - LOCK STATE = 0xb2 len 02 ??? -> add to telnet, oled and make "LOCKED" state (lock via menu, unlock via secrect brake/gas)
+//add flashprotetection function
 
 //new font
 //menu formating
-//add display popup/alerts (rectangle over content,...)
-//display alerts....
-
-//add 2nd git repo (nas3)
+//add popup "window" with/without timeout for popup/alerts (rectangle over content,...)
+//popup for alerts, popup for LOCKED State
+//add ALERT Screen, show when stopped and alert condition set
+//fix bug: add Error screen to screenswitching
+//status display: reformat/change, show LOCKED, PASSIVE, WLAN/BLE/Eco/Normal/Light
 
 //fix timing/crc issues
 //add trip computer
 //add mqtt logging
 //add komoot code for testing nav on oled
-/*
-SHOW PASSIVE MODE ON STOP/STATUS SCREEN/ASSETS SCREEN
-SHOW LOCKED STATE (if it's detected...)
-add housekepper-cyclenum to telnet statistics screen
-*/
+
 #ifdef ESP32
   #include <WiFi.h>
   #include <WiFiUdp.h>
@@ -50,7 +43,7 @@ add housekepper-cyclenum to telnet statistics screen
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.09.09"
+#define swversion "18.09.11"
 
 //scooter config
   //Info: batt12s and wheelsize have been removed --> implemented via configmenu, default 10s batt and 8.5" wheel
@@ -314,10 +307,6 @@ add housekepper-cyclenum to telnet statistics screen
   #define ts_ble_raw 3
   #define ts_bms_raw 4
   #define ts_x1_raw 5
-  #define ts_esc_array 6
-  #define ts_ble_array 7
-  #define ts_bms_array 8
-  #define ts_x1_array 9
   uint8_t telnetscreen = ts_statistics;
   uint8_t telnetscreenold = telnetscreen;
 
@@ -497,7 +486,10 @@ add housekepper-cyclenum to telnet statistics screen
     uint16_t taillight; //offset 0xfa-0xfb, off 0, on 2
     uint16_t u7[50]; //offset  0xfc-0x15f
     uint16_t error; //offset 0x160-0x161
-    uint16_t u8[3]; //offset 0x162-0x167
+    uint16_t u8[1]; //offset 0x162-0x163
+    uint8_t lockstate; //offset 0x164
+    uint8_t u9; //offset 0x165
+    uint16_t u10; //offset 0x166-0x167
     uint16_t battpercent; //offset 0x168-0x169
     int16_t speed; //0x16A-0x16B /1000 in km/h, negative value = backwards...
     uint16_t averagespeed; //0x16C-0x16D /1000 in km/h?
@@ -505,7 +497,7 @@ add housekepper-cyclenum to telnet statistics screen
     uint16_t tripdistance; //0x172-0x173
     uint16_t ontime2; //offset 0x174-0x175 power on time 2 in seconds
     uint16_t frametemp2; //0x176-0x177 /10 = temp in °C
-    uint16_t u10[68]; //offset 0x178-0x200 
+    uint16_t u11[68]; //offset 0x178-0x200 
   }__attribute__((packed))   escstruct;
 
   typedef struct {
@@ -618,41 +610,44 @@ add housekepper-cyclenum to telnet statistics screen
 
   //request arrays  
     uint8_t requestindex = 0;
-    #define requestmax 8
+    #define requestmax 9
     uint8_t requests[requestmax][3]= {
-        { address_esc, 0xB0, 0x20}, //error, battpercent,speed,averagespeed,totaldistance,tripdistance,ontime2,frametemp2
+        { address_esc, 0xB0, 0x20}, //error, lockstate, battpercent,speed,averagespeed,totaldistance,tripdistance,ontime2,frametemp2
         { address_esc, 0x25, 0x02}, //remaining distance
         { address_esc, 0x3A, 0x0A}, //ontime, triptime, frametemp1
         { address_bms, 0x31, 0x0A}, //remaining cap & percent, current, voltage, temperature
         { address_bms, 0x40, 0x18}, //cell voltages (Cells 1-10 & 11-12 for 12S Batt/Custom BMS)
         { address_bms, 0x3B, 0x02}, //Battery Health
         { address_bms, 0x10, 0x22}, //serial,fwversion,totalcapacity,cycles,chargingtimes,productiondate
-        { address_esc, 0x10, 0x16} //serial,pin,fwversion
+        { address_esc, 0x10, 0x16}, //serial,pin,fwversion
+        { address_esc, 0x7B, 0x06}  //kers, cruisemode, taillight
     };
 
   //friendly names
-    #define rq_esc_essentials 0x01
-    #define rq_esc_remdist 0x02
-    #define rq_esc_essentials2 0x04
-    #define rq_bms_essentials 0x08
-    #define rq_bms_cells 0x10
-    #define rq_bms_health 0x20
-    #define rq_bms_versioninfos 0x40
-    #define rq_esc_versioninfos 0x80
+    #define rq_esc_essentials 0x0001
+    #define rq_esc_remdist 0x0002
+    #define rq_esc_essentials2 0x0004
+    #define rq_bms_essentials 0x0008
+    #define rq_bms_cells 0x0010
+    #define rq_bms_health 0x0020
+    #define rq_bms_versioninfos 0x0040
+    #define rq_esc_versioninfos 0x0080
+    #define rq_esc_config 0x0100
 
   //mapping oled screens / requeired data
-    #define numscreens 5
-    uint8_t rqsarray[numscreens] = {
+    #define numscreens 6
+    uint16_t rqsarray[numscreens] = {
       rq_esc_essentials|rq_esc_remdist|rq_esc_essentials2|rq_bms_essentials|rq_bms_cells|rq_bms_health|rq_bms_versioninfos|rq_esc_versioninfos, //rq_esc_essentials|rq_bms_essentials|rq_esc_essentials2, //screen_stop
       //0xff, //screen_stop, TODO: Request infos like Serial/FW Version only _once_ (when entering subscreen)
       rq_esc_essentials|rq_bms_essentials, //screen_drive
       rq_esc_essentials, //screen_error
       rq_esc_essentials, //screen_timeout
-      rq_esc_essentials|rq_bms_essentials|rq_bms_cells //charging
+      rq_esc_essentials|rq_bms_essentials|rq_bms_cells, //charging
+      rq_esc_essentials|rq_esc_config //configmenu
     };
 
-  uint8_t subscribedrequests =  rqsarray[0];
-  uint8_t housekeeperrequests = rq_bms_cells|rq_esc_essentials|rq_bms_essentials;
+  uint16_t subscribedrequests =  rqsarray[0];
+  uint16_t housekeeperrequests = rq_bms_cells|rq_esc_essentials|rq_bms_essentials;
   uint8_t hkrequestindex=0;
 
 //Screen Switching
@@ -744,10 +739,13 @@ add housekepper-cyclenum to telnet statistics screen
   #define housekeepertimeout 3000 //duration between housekeeper-datarequests
   unsigned long housekeepertimestamp = housekeepertimeout;
 
-//alert states
+//alerts
   bool alert_cellvoltage = false;
   bool alert_bmstemp = false;
   bool alert_esctemp = false;
+  uint16_t alertcounter_cellvoltage = 0;
+  uint16_t alertcounter_bmstemp = 0;
+  uint16_t alertcounter_esctemp = 0;
 
 
 
@@ -846,19 +844,28 @@ void handle_housekeeper() {
     //cell voltage difference alarm:
       m365_updatebattstats();
       if ((highest-lowest)*100 >= conf_alert_batt_celldiff) {
-        alert_cellvoltage = true;
+        if (!alert_cellvoltage) {
+          alertcounter_cellvoltage++;
+          alert_cellvoltage = true;
+        }
       } else {
         alert_cellvoltage = false;
       }
     //bms temp alarm
       if (((bmsparsed->temperature[1]-20) >=conf_alert_batt_temp) | ((bmsparsed->temperature[0]-20) >= conf_alert_batt_temp)) {
-        alert_bmstemp = true;
+        if (!alert_bmstemp) {
+          alertcounter_bmstemp++;
+          alert_bmstemp = true;
+        }
       } else {
         alert_bmstemp = false;
       }
     //esc temp alarm
       if (((float)escparsed->frametemp2/10.0f) >= (float)conf_alert_esc_temp) {
-        alert_esctemp = true;
+        if (!alert_esctemp) {
+          alertcounter_esctemp++;
+          alert_esctemp = true;
+        }
       } else {
         alert_esctemp = false;
       }
@@ -1170,18 +1177,6 @@ void telnet_refreshscreen() {
           case ts_x1_raw:
               telnetclient.print("M365 X1 RAW Screen"); 
             break;
-          case ts_esc_array:
-              telnetclient.print("M365 ESC Array Screen"); 
-            break;
-          case ts_ble_array:
-              telnetclient.print("M365 BLE ARRAY Screen"); 
-            break;
-          case ts_bms_array:
-              telnetclient.print("M365 BMS ARRAY Screen"); 
-            break;
-          case ts_x1_array:
-              telnetclient.print("M365 X1 ARRAY Screen"); 
-            break;
           case ts_statistics:
               telnetclient.print("M365 Statistics Screen");
             break;
@@ -1206,14 +1201,14 @@ void telnet_refreshscreen() {
                 telnetclient.printf(" Highest: %1.3f Lowest: %1.3f Difference: %1.3f\r\n",(float)highest/1000.0f, (float)lowest/1000.0f, (float)(highest-lowest)/1000.0f); 
                 sprintf(tmp1,"%c%c%c%c%c%c%c%c%c%c%c%c%c%c",escparsed->serial[0],escparsed->serial[1],escparsed->serial[2],escparsed->serial[3],escparsed->serial[4],escparsed->serial[5],escparsed->serial[6],escparsed->serial[7],escparsed->serial[8],escparsed->serial[9],escparsed->serial[10],escparsed->serial[11],escparsed->serial[12],escparsed->serial[13]);
                 telnetclient.printf("\r\n\r\nESC Serial: %s Version: %x.%x.%x\r\n", tmp1,escparsed->fwversion[1],(escparsed->fwversion[0]&0xf0)>>4,escparsed->fwversion[0]&0x0f);
-                sprintf(tmp1,"%c%c%c%c%c%c",escparsed->pin[0],escparsed->pin[1],escparsed->pin[2],escparsed->pin[3],escparsed->pin[4],escparsed->pin[5]);
-                telnetclient.printf(" Pin: %s Error %05d\r\n",tmp1,escparsed->error);
                 telnetclient.printf(" Distance Total: %.2f km Trip: %.2f km Remaining %.2f km\r\n", (float)escparsed->totaldistance/1000.0f,(float)escparsed->tripdistance/100.0f,(float)escparsed->remainingdistance/100.0f);
                 telnetclient.printf(" Power On Time1: %d s, Power On Time1: %d s, Trip Time: %d s\r\n",escparsed->ontime1,escparsed->ontime2,escparsed->triptime);
                 telnetclient.printf(" FrameTemp1: %05d FrameTemp2: %.1f °C\r\n", (float)escparsed->frametemp1/10.0f, (float)escparsed->frametemp2/10.0f);
                 telnetclient.printf(" Speed: %.2f km/h Avg: %.2f km/h\r\n", (float)escparsed->speed/1000.0f, (float)escparsed->averagespeed/1000.0f);
                 telnetclient.printf(" Batt Percent: %3d%%\r\n",escparsed->battpercent);
                 telnetclient.printf(" Ecomode: %05d Kers: %05d Cruisemode: %05d Taillight: %05d\r\n", escparsed->ecomode, escparsed->kers, escparsed->cruisemode, escparsed->taillight);
+                sprintf(tmp1,"%c%c%c%c%c%c",escparsed->pin[0],escparsed->pin[1],escparsed->pin[2],escparsed->pin[3],escparsed->pin[4],escparsed->pin[5]);
+                telnetclient.printf(" Pin: %s\r\n Error %05d Lockstate %02d\r\n",tmp1,escparsed->error, escparsed->lockstate);
                 telnetclient.printf("\r\n\r\nX1 Mode %03d LEDs %03d Light ",x1parsed->mode, x1parsed->battleds);
                 if (x1parsed->light==0) { telnetclient.print("OFF "); } else {
                   if (x1parsed->light==100) { telnetclient.print("ON "); } else {
@@ -1231,6 +1226,8 @@ void telnet_refreshscreen() {
               telnetclient.printf("\r\nALARM States:\r\n  Cellvoltage Differnce (Is: %d mV, Alert: %d0 mV): %s\r\n",highest-lowest, conf_alert_batt_celldiff, alert_cellvoltage ? "true" : "false");
               telnetclient.printf("  BMS Temperature (Is: %d °C %d °C, Alert: %d °C): %s\r\n",bmsparsed->temperature[1]-20, bmsparsed->temperature[0]-20,conf_alert_batt_temp, alert_bmstemp ? "true" : "false");
               telnetclient.printf("  ESC Temperarture (Is: %3.1f °C, Alert: %d °C): %s\r\n",(float)escparsed->frametemp2/10.0f, conf_alert_esc_temp, alert_esctemp ? "true" : "false");
+              telnetclient.printf("  ALARM Counters: Cellvoltage: %d, BMS Temperature: %d, ESC Temperature %d\r\n", alertcounter_cellvoltage, alertcounter_bmstemp, alertcounter_esctemp);
+
 /*                    m365_updatebattstats();
       if ((highest-lowest)*100 >= conf_alert_batt_celldiff) {
         alert_cellvoltage = true;
@@ -1329,14 +1326,6 @@ void telnet_refreshscreen() {
                   telnetclient.printf("%02X ", x1data[j]);
               }
               telnetnextrefreshtimestamp=millis()+telnetrefreshrawarrayscreen;
-            break;
-          case ts_esc_array:
-          case ts_ble_array:
-          case ts_bms_array:
-          case ts_x1_array:
-              telnetclient.print("empty screen - not implemented");
-              telnetnextrefreshtimestamp=millis()+telnetrefreshanyscreen;
-              
             break;
         }
         yield();
@@ -1499,10 +1488,6 @@ void handle_telnet() {
                 case 0x62: telnetscreen=ts_bms_raw; break; //b
                 case 0x6E: telnetscreen=ts_ble_raw; break; //n
                 case 0x78: telnetscreen=ts_x1_raw; break; //x
-                case 0x45: telnetscreen=ts_esc_array; break; //E
-                case 0x42: telnetscreen=ts_bms_array; break; //B
-                case 0x4E: telnetscreen=ts_ble_array; break; //N
-                case 0x58: telnetscreen=ts_x1_array; break;  //X
                 case 0x72: reset_statistics(); break;  //r
               } //switch
               //while(serverClients[i].available()) M365DebugSerial.write(serverClients[i].read());
@@ -1871,9 +1856,9 @@ void saveconfig() {
 
 
 
-#define cms_light 0 //tail ligth on/off
-#define cms_cruise 1 //cruise mode on/off
-#define cms_kers 2 //set kers
+#define cms_light 0 //tail ligth on/off //WORKING
+#define cms_cruise 1 //cruise mode on/off //WORKING
+#define cms_kers 2 //set kers //WORKING
 #define cms_ws 3 //set wheelsize //WORKING
 #define cms_bc 4 //set number of cells (10/12s) //WORKING
 #define cms_bac 5 //set Battery Alert CellVoltage Difference //WORKING
@@ -1883,11 +1868,10 @@ void saveconfig() {
 #define cms_blekomoot 9 //activate ble/komoot navigaton display //NOT IMPLEMENTED
 #define cms_busmode 10 //busmode active/passive (request data from m365 or not...?) //WORKING
 #define cms_wifirestart 11 //restart wifi //WORKING
-#define cms_lock 12 //WORKING
-#define cms_unlock 13 //WORKING
-#define cms_turnoff 14 //WORKING
-#define cms_exit 15 //exitmenu //WORKING
-#define configsubscreens 16
+#define cms_changelock 12 //WORKING
+#define cms_turnoff 13 //WORKING
+#define cms_exit 14 //exitmenu //WORKING
+#define configsubscreens 15
 #define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
 #define configlinesabove 2
 #define confignumlines 6
@@ -1912,9 +1896,9 @@ void handle_configmenu() {
               break;
             case cms_kers:
                 switch(escparsed->kers) {
-                  case 0: sendcommand = cmd_kers_weak; break;
-                  case 1: sendcommand = cmd_kers_medium; break;
-                  case 2: sendcommand = cmd_kers_strong; break;
+                  case 0: sendcommand = cmd_kers_medium; break;
+                  case 1: sendcommand = cmd_kers_strong; break;
+                  case 2: sendcommand = cmd_kers_weak; break;
                 }
               break;
             case cms_ws: 
@@ -1965,11 +1949,12 @@ void handle_configmenu() {
                 subscreen = 0;
                 if (configchanged) { saveconfig(); applyconfig(); }
               break;
-            case cms_lock:
-                sendcommand = cmd_lock;
-              break;
-            case cms_unlock:
-                sendcommand = cmd_unlock;
+            case cms_changelock:
+                if (escparsed->lockstate==0x00) { 
+                  sendcommand = cmd_lock;
+                } else {
+                  sendcommand = cmd_unlock;
+                }
               break;
             case cms_turnoff:
                 sendcommand = cmd_turnoff;
@@ -2448,8 +2433,8 @@ void oled_switchscreens() {
             case cms_cruise: 
                 display1.print("Cruise Control:");
                   switch(escparsed->cruisemode) {
-                    case 0: display1.print("On"); break;
-                    case 1: display1.print("Off"); break;
+                    case 0: display1.print("Off"); break;
+                    case 1: display1.print("On"); break;
                   }
               break;
             case cms_kers: 
@@ -2474,19 +2459,24 @@ void oled_switchscreens() {
               break;
             case cms_eat: display1.printf("ESC Temp Alert: %d C", conf_alert_esc_temp);
               break;
-            case cms_flashprotection: display1.print("Flashprotection: ");
-                if (conf_flashprotect) { display1.print("On"); } else { display1.print("Off"); }
+            case cms_flashprotection: display1.print("***");
+                //display1.print("Flashprotection: ");
+                //if (conf_flashprotect) { display1.print("On"); } else { display1.print("Off"); }
               break;
-            case cms_blekomoot: display1.print("Start BLE for Komoot");
+            case cms_blekomoot: display1.print("***");
+                //display1.print("Start BLE for Komoot");
               break;
             case cms_busmode: display1.print("ESP Busmode: ");
                 if (conf_espbusmode) { display1.print("Active"); } else { display1.print("Passive"); }
               break;
             case cms_wifirestart: display1.print("ESP Restart Wifi");
               break;
-            case cms_lock: display1.print("M365 LOCK");
-              break;
-            case cms_unlock: display1.print("M365 UNLOCK");
+            case cms_changelock: 
+                  if (escparsed->lockstate==0x00) {
+                    display1.print("M365 LOCK");
+                  } else {
+                    display1.print("M365 UNLOCK");
+                  }
               break;
             case cms_turnoff: display1.print("M365 OFF");
               break;
@@ -2648,27 +2638,35 @@ void oled_switchscreens() {
       }
       if ((screen==screen_stop)&(subscreen==0)) {
         //if (screen==screen_drive) {
-        //LIGHT ON/OFF
-          if (x1parsed->light==0x64) { 
+        //Lockstate
+          if (escparsed->lockstate==0x02) { 
             display1.setFont();
-            display1.setCursor(120,line1);
-            display1.print("L");
-          }
-        //NORMAL/ECO MODE
-          display1.setFont();
-          display1.setCursor(112,line1);
-          if (x1parsed->mode<2) { 
-            display1.print("N"); //normal mode
+            display1.setCursor(88,line1);
+            display1.print("LOCKED");
           } else {
-            display1.print("E"); //eco mode
-          }
-        //WLAN STATUS
-          display1.setFont();
-          display1.setCursor(96,line1);
-          if (wlanstate==wlansearching) { display1.print("WS"); }
-          if (wlanstate==wlanconnected) { display1.print("WC"); }
-          if (wlanstate==wlanap) { display1.print("WA"); }
-        }
+        
+            //LIGHT ON/OFF
+              if (x1parsed->light==0x64) { 
+                display1.setFont();
+                display1.setCursor(120,line1);
+                display1.print("L");
+              }
+            //NORMAL/ECO MODE
+              display1.setFont();
+              display1.setCursor(112,line1);
+              if (x1parsed->mode<2) { 
+                display1.print("N"); //normal mode
+              } else {
+                display1.print("E"); //eco mode
+              }
+            //WLAN STATUS
+              display1.setFont();
+              display1.setCursor(96,line1);
+              if (wlanstate==wlansearching) { display1.print("WS"); }
+              if (wlanstate==wlanconnected) { display1.print("WC"); }
+              if (wlanstate==wlanap) { display1.print("WA"); }
+            }
+          } //else lockstate
 
     duration_oled1draw = micros()-timestamp_oled1draw;
     timestamp_oled1transfer=micros();
