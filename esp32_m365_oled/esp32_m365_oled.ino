@@ -655,16 +655,33 @@
   #define screen_stop 0
   #define screen_drive 1
   #define screen_error 2
-  #define screen_timeout 3
-  #define screen_charging 4
-  #define screen_configmenu 5
+  #define screen_alarm 3
+  #define screen_timeout 4
+  #define screen_charging 5
+  #define screen_configmenu 6
 
   uint8_t subscreen = 0;
   uint8_t windowsubpos=0;
-  #if !defined useoled2
+  
+  #if !defined useoled2 //Single Screen Stopscreens
     #define stopsubscreens 8
-  #else  
+    #define stopsubscreen_trip 0 //single/dual/same
+    #define stopsubscreen_temp 1 //single
+    #define stopsubscreen_minmax 2 //single/dual/same
+    #define stopsubscreen_batt1 3 //single/dual/same
+    #define stopsubscreen_batt2 4 //single
+    #define stopsubscreen_cells 5 //single/dual/different
+    #define stopsubscreen_assets 6 //single/dual/same
+    #define stopsubscreen_espstate 7 //single
+    #define stopsubscreen_alarms 8 //single/dual/same
+  #else //Dual Screen Stopscreens
     #define stopsubscreens 5
+    #define stopsubscreen_trip 0
+    #define stopsubscreen_minmax 1 //single/dual/same
+    #define stopsubscreen_batt1 2 //single/dual/same
+    #define stopsubscreen_cells 3
+    #define stopsubscreen_assets 4 //single/dual/same
+    #define stopsubscreen_alarms 5 //single/dual/same
   #endif
   #define chargesubscreens 2
   #define gasmin 50
@@ -1992,6 +2009,14 @@ boolean brakebuttonpressed = false;
 unsigned long buttonbrakeshortpressedtimestamp = 0;
 unsigned long buttonbrakelongpressedtimestamp = 0;
 
+uint8_t throttlebuttonstate = 0;
+boolean throttlebuttonpressed = false;
+#define buttonthrottlepressed1 150
+#define buttonthrottleshortpressedduration 50
+#define buttonthrottlelongpressedduration 500
+unsigned long buttonthrottleshortpressedtimestamp = 0;
+unsigned long buttonthrottlelongpressedtimestamp = 0;
+
 void oled_switchscreens() {
   uint8_t oldscreen = screen;
   
@@ -2026,19 +2051,37 @@ void oled_switchscreens() {
       }
       brakebuttonpressed=false;
     }
+
+    if (newdata & (bleparsed->throttle>=buttonthrottlepressed1) & !throttlebuttonpressed) {
+      buttonthrottleshortpressedtimestamp = millis() + buttonthrottleshortpressedduration;
+      buttonthrottlelongpressedtimestamp = millis() + buttonthrottlelongpressedduration;
+      throttlebuttonpressed=true;
+      throttlebuttonstate=0;
+    }
+    if (newdata & (bleparsed->throttle<buttonthrottlepressed1) & throttlebuttonpressed) {
+      if (millis()>buttonthrottleshortpressedtimestamp) { 
+        throttlebuttonstate=1; //1 = short, 2 = long press
+      }
+      if (millis()>buttonthrottlelongpressedtimestamp) { 
+        throttlebuttonstate=2; //1 = short, 2 = long press
+      }
+      throttlebuttonpressed=false;
+    }
   
   //execute commands from configscreen
-    if (screen==screen_configmenu & brakebuttonstate==1) {
+    if (screen==screen_configmenu & brakebuttonstate!=0) {
       handle_configmenu();
       updatescreen = true;
     }
+
   //switch to configmenu
-    if (brakebuttonstate==1 & ((screen==screen_stop & subscreen == stopsubscreens) || (screen==screen_charging))) {
+    if (brakebuttonstate!=0 & throttlebuttonstate!=0 & escparsed->speed==0) {
       screen = screen_configmenu;
       subscreen = 0;
       configchanged = false;
       updatescreen = true;
     }
+/*
   //exit from configmenu via long-brake-press
     if (brakebuttonstate==2 & screen==screen_configmenu) {
     //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
@@ -2047,6 +2090,7 @@ void oled_switchscreens() {
       subscreen = 0;
       updatescreen = true;
     }
+    */
   //configmenu navigaton via gas:
   if (newdata & (screen==screen_configmenu)) {
     uint8_t oldsubscreen = subscreen;
@@ -2146,6 +2190,7 @@ void oled_switchscreens() {
     if (updatescreen) { newdata=false; }
   //reset buttonstate
     brakebuttonstate=0;
+    throttlebuttonstate=0;
 } //oled_switchscreens
 
 #ifdef useoled1
@@ -2215,7 +2260,7 @@ void oled_switchscreens() {
           //display1.drawFastHLine(0,8,windowsubpos,WHITE);
           switch (subscreen) {
 
-            case 0: //Trip Info: Average Speed, Distance, Time, Average Speed 
+            case stopsubscreen_trip: //Trip Info: Average Speed, Distance, Time, Average Speed 
                 display1.print("TRIP Info");
                 //display1.drawFastHLine(0,8,128,WHITE);
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset); display1.print("Avg:");
@@ -2232,27 +2277,24 @@ void oled_switchscreens() {
                 display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset*4+linespace*3); display1.printf("%05.2f",(float)escparsed->remainingdistance/100.0f);
                 display1.setCursor(100,dataoffset+baselineoffset*4+linespace*3); display1.setFont(); display1.print("km");
               break;
-            #if !defined useoled2
-              case 1: //Single Screen  Temperatures - Frame temp 1 & 2, Batt Temp 1 & 2
-//FIX THIS SCREEN -> UNITS & Alignment
-                  display1.printf("TEMPERATURE     (%d/%d)",subscreen,stopsubscreens);
-                line = dataoffset+baselineoffset;
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Batt1:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)bmsparsed->temperature[0]-20.0f);  
-                  display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
-                line = dataoffset+baselineoffset*2+linespace;
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Batt2:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)bmsparsed->temperature[1]-20.0f);  
-                  display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
-                line = dataoffset+baselineoffset*3+linespace*2;
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("ESC:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)escparsed->frametemp2/10.0f);
-                  display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
-                break;
-              case 2: //Single Screen: Min/Max Values
-            #else
-              case 1: //Dual Screen: Min/Max Values
-            #endif
+              #if !defined useoled2
+                case stopsubscreen_temp: //Single
+                    display1.printf("TEMPERATURE     (%d/%d)",subscreen,stopsubscreens);
+                  line = dataoffset+baselineoffset;
+                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Batt1:");
+                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)bmsparsed->temperature[0]-20.0f);  
+                    display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
+                  line = dataoffset+baselineoffset*2+linespace;
+                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Batt2:");
+                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)bmsparsed->temperature[1]-20.0f);  
+                    display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
+                  line = dataoffset+baselineoffset*3+linespace*2;
+                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("ESC:");
+                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)escparsed->frametemp2/10.0f);
+                    display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
+                  break;
+              #endif
+              case stopsubscreen_minmax: //Single/Dual/Same
                 display1.printf("TRIP Min/Max    (%d/%d)\r\n\r\n",subscreen,stopsubscreens);
                 display1.printf("Speed : %5.1f %5.1f\r\n",(float)speed_min/1000.0f,(float)speed_max/1000.0f);
                 display1.printf("Ampere: %5.1f %5.1f A\r\n",(float)current_min/100.0f,(float)current_max/100.0f);
@@ -2261,13 +2303,12 @@ void oled_switchscreens() {
                 display1.printf("BattT2: %3d.0 %3d.0 C\r\n",tb2_min-20,tb2_max-20); display1.drawCircle(117,50,1,WHITE);
                 display1.printf("ESC T : %5.1f %5.1f C\r\n",(float)te_min/10.0f,(float)te_max/10.0f); display1.drawCircle(117,58,1,WHITE);
               break;
-            #if !defined useoled2
-              case 3: //Single Screen Batt Info 1: Total Capacity, Remaining, Voltage, Percent
-                display1.printf("BATTERY 1       (%d/%d)",subscreen,stopsubscreens);
-            #else
-              case 2: //Dual Screen : Batt Info
-                display1.printf("BATTERY STATUS  (%d/%d)",subscreen,stopsubscreens);
-            #endif
+              case stopsubscreen_batt1: //Single/Dual/Same
+                #if !defined useoled2
+                  display1.printf("BATTERY 1       (%d/%d)",subscreen,stopsubscreens);
+                #else
+                  display1.printf("BATTERY STATUS  (%d/%d)",subscreen,stopsubscreens);
+                #endif
                 line = dataoffset+baselineoffset;
                   display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Volt:");
                   display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%5.2f",(float)bmsparsed->voltage/100.0f);
@@ -2285,31 +2326,29 @@ void oled_switchscreens() {
                   display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->chargingtimes);
                   display1.setCursor(119,line); display1.setFont(); display1.print("#");
               break;
-            #if !defined useoled2  
-              case 4: //Single Screen Batt Info 2: Health/Cycles/Charge Num/Prod Date
-                  display1.printf("BATTERY 2       (%d/%d)",subscreen,stopsubscreens);
-                  line = dataoffset+baselineoffset;
-                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Health:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->health);
-                    display1.setCursor(119,line); display1.setFont(); display1.print("%");
-                  line = dataoffset+baselineoffset*2+linespace;
-                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Cap:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(56,line); display1.printf("%5d",bmsparsed->remainingcapacity);
-                    display1.setCursor(108,line); display1.setFont(); display1.print("mAh");
-                  line = dataoffset+baselineoffset*3+linespace*2;
-                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Total:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(56,line); display1.printf("%5d",bmsparsed->totalcapacity);
-                    display1.setCursor(108,line); display1.setFont(); display1.print("mAh");
-                  line = dataoffset+baselineoffset*4+linespace*3;
-                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Temp:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%02d/%02d",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
-                    display1.setCursor(119,line); display1.setFont(); display1.print("C");
-                    display1.drawCircle(115,line-5,1,WHITE);
-                   break;
-              case 5: //Single Screen Cell Voltages
-            #else
-              case 3: //dual screen Cell Voltages
-            #endif
+              #if !defined useoled2  
+                case stopsubscreen_batt2: //Single Screen Batt Info 2: Health/Cycles/Charge Num/Prod Date
+                    display1.printf("BATTERY 2       (%d/%d)",subscreen,stopsubscreens);
+                    line = dataoffset+baselineoffset;
+                      display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Health:");
+                      display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->health);
+                      display1.setCursor(119,line); display1.setFont(); display1.print("%");
+                    line = dataoffset+baselineoffset*2+linespace;
+                      display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Cap:");
+                      display1.setFont(&FreeSansBold9pt7b); display1.setCursor(56,line); display1.printf("%5d",bmsparsed->remainingcapacity);
+                      display1.setCursor(108,line); display1.setFont(); display1.print("mAh");
+                    line = dataoffset+baselineoffset*3+linespace*2;
+                      display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Total:");
+                      display1.setFont(&FreeSansBold9pt7b); display1.setCursor(56,line); display1.printf("%5d",bmsparsed->totalcapacity);
+                      display1.setCursor(108,line); display1.setFont(); display1.print("mAh");
+                    line = dataoffset+baselineoffset*4+linespace*3;
+                      display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Temp:");
+                      display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%02d/%02d",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
+                      display1.setCursor(119,line); display1.setFont(); display1.print("C");
+                      display1.drawCircle(115,line-5,1,WHITE);
+                     break;
+              #endif
+              case stopsubscreen_cells: //single/dual/different
                 display1.printf("CELL VOLTAGES   (%d/%d)\r\n",subscreen,stopsubscreens);
                 #if !defined useoled2
                   if (conf_battcells>=1) { display1.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
@@ -2341,11 +2380,7 @@ void oled_switchscreens() {
                   if (conf_battcells>=8) { display1.printf("8:%5.3f",(float)bmsparsed->Cell8Voltage/1000.0f); }
                 #endif  
               break;
-            #if !defined useoled2
-              case 6: //Single Screen Serials/Versions/Name
-            #else
-              case 4: //dual screen Serials/Versions/Name
-            #endif
+              case stopsubscreen_assets: //Single/Dual/Same
                 display1.printf("Assets          (%d/%d)\r\n",subscreen,stopsubscreens);
                 //display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset); display1.print("BMS SN:");
                 sprintf(tmp1,"%c%c%c%c%c%c%c%c%c%c%c%c%c%c",bmsparsed->serial[0],bmsparsed->serial[1],bmsparsed->serial[2],bmsparsed->serial[3],bmsparsed->serial[4],bmsparsed->serial[5],bmsparsed->serial[6],bmsparsed->serial[7],bmsparsed->serial[8],bmsparsed->serial[9],bmsparsed->serial[10],bmsparsed->serial[11],bmsparsed->serial[12],bmsparsed->serial[13]);
@@ -2371,41 +2406,32 @@ void oled_switchscreens() {
                 //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset*3+linespace*2); 
                 //display1.printf("%s",tmp1);
               break;
-            #if !defined useoled2  
-              case 7: //single screen ESP Status
-                  display1.printf("ESP32 State     (%d/%d)\r\n\r\n",subscreen,stopsubscreens);
-                  display1.print("Firmware: "); display1.println(swversion);
-                  display1.print("WLAN: ");
-                  if (wlanstate==wlansearching) { display1.println("searching..."); }
-                  if (wlanstate==wlanconnected) { display1.print("Connected\r\nSSID: "); display1.println(WiFi.SSID()); display1.println(WiFi.localIP()); }
-                  if (wlanstate==wlanap) { display1.print("AP Mode\r\nSSID: "); display1.println(WiFi.softAPIP()); display1.println( WiFi.softAPIP());}
-                  if (wlanstate==wlanoff) { display1.println("OFF"); }
-                  display1.print("BT: OFF");
-                break;
-              case 8: //single screen config / menu
-            #else
-              case 5: //dual screen config/menu
-            #endif
-               display1.printf("CONFIG          (%d/%d)",subscreen, stopsubscreens);
-               display1.setTextSize(1);
-               display1.setTextColor(WHITE);
-               display1.setFont(&FreeSans9pt7b); 
-               display1.setCursor(0,30);
-               display1.print("PRESS BRAKE");
-               display1.setCursor(5,50);
-               display1.print(" FOR MENU");
-
-
-                /*
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset); display1.print("KERS:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(80,dataoffset+baselineoffset); display1.print("Weak");
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*2+linespace+1); display1.print("Tail Light:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(80,dataoffset+baselineoffset*2+linespace+1); display1.print("  Off");
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*3+(linespace+1)*2); display1.print("Cruise:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(80,dataoffset+baselineoffset*3+(linespace+1)*2); display1.print("   On");
-                //display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*4+linespace*3); display1.print("Volt:");
-                //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset*4+linespace*3); display1.print("42.65V");
-                */
+              #if !defined useoled2  
+                case stopsubscreen_espstate: //single
+                    display1.printf("ESP32 State     (%d/%d)\r\n\r\n",subscreen,stopsubscreens);
+                    display1.print("Firmware: "); display1.println(swversion);
+                    display1.print("WLAN: ");
+                    if (wlanstate==wlansearching) { display1.println("searching..."); }
+                    if (wlanstate==wlanconnected) { display1.print("Connected\r\nSSID: "); display1.println(WiFi.SSID()); display1.println(WiFi.localIP()); }
+                    if (wlanstate==wlanap) { display1.print("AP Mode\r\nSSID: "); display1.println(WiFi.softAPIP()); display1.println( WiFi.softAPIP());}
+                    if (wlanstate==wlanoff) { display1.println("OFF"); }
+                    display1.print("BT: OFF");
+                  break;
+              #endif
+              case stopsubscreen_alarms: //single/dual/same
+               display1.printf("ALARMCOUNTERS   (%d/%d)",subscreen, stopsubscreens);
+              line = dataoffset+baselineoffset;
+                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("BMS Temp:");
+                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",alertcounter_bmstemp);
+                //display1.setCursor(119,line); display1.setFont(); display1.print("V");
+              line = dataoffset+baselineoffset*2+linespace;
+                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("ESC Temp:");
+                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",alertcounter_esctemp);
+                //display1.setCursor(119,line); display1.setFont(); display1.print("%");
+              line = dataoffset+baselineoffset*3+linespace*2;
+                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("CellVoltage:");
+                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",alertcounter_cellvoltage);
+                //display1.setCursor(119,line); display1.setFont(); display1.print("#");
               break;
           }
     }
@@ -2586,7 +2612,6 @@ void oled_switchscreens() {
     if (screen==screen_timeout) {
       #ifdef useoled2
         oled_startscreen();
-
       #else
         display1.drawBitmap(0,0,  scooter, 64,64, 1);
         display1.setFont(&fontsmall);
@@ -2721,7 +2746,7 @@ void oled_switchscreens() {
           display2.setFont();
           display2.setCursor(0,0);
           switch (subscreen) {
-            case 0: //Temperatures - we have 2 Battery Temperatures, but we only display the higher one - both can be seen on detail screens
+            case stopsubscreen_trip: //Temperatures - we have 2 Battery Temperatures, but we only display the higher one - both can be seen on detail screens
                 display2.setFont(&FreeSans9pt7b); display2.setCursor(0,baselineoffset); display2.print("Batt:");
                 display2.setFont(&FreeSansBold9pt7b); display2.setCursor(60,baselineoffset); 
                 if ((float)bmsparsed->temperature[0]>=(float)bmsparsed->temperature[1]) {
@@ -2748,7 +2773,7 @@ void oled_switchscreens() {
 
                 
               break;
-            case 1:
+            case stopsubscreen_minmax:
                 display2.printf("FIX THIS SCREEN (%d/%d)\r\n\r\n",subscreen,stopsubscreens);
                 /*
                 display2.printf("Speed: %04.1f/%04.1f\r\n",(float)speed_min/1000.0f,(float)speed_max/1000.0f);
@@ -2759,7 +2784,7 @@ void oled_switchscreens() {
                 display2.printf("ESC Temp: %4.1f/%4.1f°C\r\n",(float)te_min/10.0f,(float)te_max/10.0f);
                 */
               break;
-            case 2:
+            case stopsubscreen_batt1:
                   line = baselineoffset;
                     display2.setFont(&FreeSans9pt7b); display2.setCursor(0,line); display2.print("Health:");
                     display2.setFont(&FreeSansBold9pt7b); display2.setCursor(64,line); display2.printf("%4d",bmsparsed->health);
@@ -2778,7 +2803,7 @@ void oled_switchscreens() {
                     display2.setCursor(119,line); display2.setFont(); display2.print("C");
                     display2.drawCircle(115,line-5,1,WHITE);
               break;
-            case 3:
+            case stopsubscreen_cells:
                 display2.setFont(&FreeSans9pt7b); 
                 display2.setCursor(0,12);
                 if (conf_battcells>=9) { display2.printf("9:%5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
@@ -2791,7 +2816,7 @@ void oled_switchscreens() {
                 display2.setCursor(0,12+14+14+14);
                 display2.printf("T:%5.2f D:%5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
               break;
-            case 4:
+            case stopsubscreen_assets:
                 display2.print("ESP32 Status\r\nFirmware: "); display2.println(swversion);
                 display2.print("WLAN: ");
                 if (wlanstate==wlansearching) { display2.println("searching..."); }
@@ -2800,13 +2825,13 @@ void oled_switchscreens() {
                 if (wlanstate==wlanoff) { display2.println("OFF"); }
                 display2.print("BT: OFF");  
               break;
-            case 5:
-                display2.printf("CONFIG          (%d/%d)\r\n",subscreen,stopsubscreens);
+            case stopsubscreen_alarms:
+                display2.printf("ALARMCOUNTERS   (%d/%d)\r\n",subscreen,stopsubscreens);
               break;
             default:
                 display2.setFont();
                 display2.setCursor(0,0);
-                display2.print("STOP");
+                display2.print("OLED2 STOP DEFAULT");
               break;
           }
 
