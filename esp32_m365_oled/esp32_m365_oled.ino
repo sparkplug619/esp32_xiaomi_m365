@@ -9,20 +9,21 @@
  * - does not receive/decode all data after doing OTA, reboot once and it works
  */
 
-//add flashprotetection function
-
+//MEnu: Add Value Changer for Temp-Alerts
 //new font
 //menu formating
 //add popup "window" with/without timeout for popup/alerts (rectangle over content,...)
 //popup for alerts, popup for LOCKED State
 //add ALERT Screen, show when stopped and alert condition set
-//fix bug: add Error screen to screenswitching
 //status display: reformat/change, show LOCKED, PASSIVE, WLAN/BLE/Eco/Normal/Light
 
 //fix timing/crc issues
 //add trip computer
 //add mqtt logging
 //add komoot code for testing nav on oled
+//add flashprotetection function
+
+//LOCKED AND SPEED? BLINK/ALERT!!!!
 
 #ifdef ESP32
   #include <WiFi.h>
@@ -43,7 +44,7 @@
 //#include <endian.h>
 #include <ArduinoOTA.h>
 
-#define swversion "18.09.11"
+#define swversion "18.09.17"
 
 //scooter config
   //Info: batt12s and wheelsize have been removed --> implemented via configmenu, default 10s batt and 8.5" wheel
@@ -55,7 +56,7 @@
   #define OLED1_ROTATION 2 //0 = normal, 1= 90, 2=180, 3=270° CW
 
 
-  #define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
+  //#define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
 
   #ifdef developermode
     //detailed config
@@ -214,6 +215,11 @@
     #define baselineoffset 13
     #define linespace 1
     #define dataoffset 8
+    
+    boolean oledreinit = false;
+    #define oledreinitduration 30000
+    unsigned long oledreinittimestamp = 0;
+
 
     static const unsigned char PROGMEM scooter [] PROGMEM = {
       0x00, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -635,7 +641,7 @@
     #define rq_esc_config 0x0100
 
   //mapping oled screens / requeired data
-    #define numscreens 6
+    #define numscreens 7
     uint16_t rqsarray[numscreens] = {
       rq_esc_essentials|rq_esc_remdist|rq_esc_essentials2|rq_bms_essentials|rq_bms_cells|rq_bms_health|rq_bms_versioninfos|rq_esc_versioninfos, //rq_esc_essentials|rq_bms_essentials|rq_esc_essentials2, //screen_stop
       //0xff, //screen_stop, TODO: Request infos like Serial/FW Version only _once_ (when entering subscreen)
@@ -643,7 +649,8 @@
       rq_esc_essentials, //screen_error
       rq_esc_essentials, //screen_timeout
       rq_esc_essentials|rq_bms_essentials|rq_bms_cells, //charging
-      rq_esc_essentials|rq_esc_config //configmenu
+      rq_esc_essentials|rq_esc_config, //configmenu
+      rq_esc_essentials|rq_esc_essentials2|rq_bms_essentials //alarm
     };
 
   uint16_t subscribedrequests =  rqsarray[0];
@@ -655,10 +662,10 @@
   #define screen_stop 0
   #define screen_drive 1
   #define screen_error 2
-  #define screen_alarm 3
-  #define screen_timeout 4
-  #define screen_charging 5
-  #define screen_configmenu 6
+  #define screen_timeout 3
+  #define screen_charging 4
+  #define screen_configmenu 5
+  #define screen_alarm 6
 
   uint8_t subscreen = 0;
   uint8_t windowsubpos=0;
@@ -688,6 +695,31 @@
   #define gasmax 190
   #define stopwindowsize (uint8_t)((gasmax-gasmin)/stopsubscreens)
   #define chargewindowsize (uint8_t)((gasmax-gasmin)/chargesubscreens)
+
+//Config Menu
+  #define cms_light 0 //tail ligth on/off //WORKING
+  #define cms_cruise 1 //cruise mode on/off //WORKING
+  #define cms_kers 2 //set kers //WORKING
+  #define cms_ws 3 //set wheelsize //WORKING
+  #define cms_bc 4 //set number of cells (10/12s) //WORKING
+  #define cms_bac 5 //set Battery Alert CellVoltage Difference //WORKING
+  #define cms_bat 6 //set Battery Alert Temperature //NOT IMPLEMENTED
+  #define cms_eat 7 //set ESC Alert Temperature //NOT IMPLEMENTED
+  #define cms_flashprotection 8 //activate flashprotection //NOT IMPLEMENTED
+  #define cms_blekomoot 9 //activate ble/komoot navigaton display //NOT IMPLEMENTED
+  #define cms_busmode 10 //busmode active/passive (request data from m365 or not...?) //WORKING
+  #define cms_wifirestart 11 //restart wifi //WORKING
+  #define cms_changelock 12 //WORKING
+  #define cms_turnoff 13 //WORKING
+  #define cms_exit 14 //exitmenu //WORKING
+  #define configsubscreens 15
+  #define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
+  #define configlinesabove 2
+  #define confignumlines 6
+  uint8_t configstartindex = 0;
+  uint8_t configendindex = 0;
+  bool configchanged = false;
+
 
 //Misc
 #ifdef usestatusled
@@ -764,7 +796,26 @@
   uint16_t alertcounter_bmstemp = 0;
   uint16_t alertcounter_esctemp = 0;
 
+//buttonhandling
+  uint8_t brakebuttonstate = 0;  //1 = short, 2 = long press
+  boolean brakebuttonpressed = false; //helper for key-detection
+  #define buttonbrakepressed1 60 //treshold for "button pressed"
+  #define buttonbrakeshortpressedduration 50 //millis needed for short press
+  #define buttonbrakelongpressedduration 500 //millis needed for long press
+  unsigned long buttonbrakepressedtimestamp = 0;
 
+  uint8_t throttlebuttonstate = 0;  //1 = short, 2 = long press
+  boolean throttlebuttonpressed = false; //helper for key-detection
+  #define buttonthrottlepressed1 150 //treshold for "button pressed"
+  #define buttonthrottleshortpressedduration 50 //millis needed for short press
+  #define buttonthrottlelongpressedduration 500 //millis needed for long press
+  unsigned long buttonthrottlepressedtimestamp = 0;
+
+  uint8_t bothbuttonstate = 0;  //1 = short, 2 = long press
+  boolean bothbuttonpressed = false; //helper for key-detection
+  #define buttonbothshortpressedduration 50 //millis needed for short press
+  #define buttonbothlongpressedduration 500 //millis needed for long press
+  unsigned long buttonbothpressedtimestamp = 0;
 
 void reset_statistics() {
   packets_rec=0;
@@ -1871,31 +1922,6 @@ void saveconfig() {
   preferences.end();
 }
 
-
-
-#define cms_light 0 //tail ligth on/off //WORKING
-#define cms_cruise 1 //cruise mode on/off //WORKING
-#define cms_kers 2 //set kers //WORKING
-#define cms_ws 3 //set wheelsize //WORKING
-#define cms_bc 4 //set number of cells (10/12s) //WORKING
-#define cms_bac 5 //set Battery Alert CellVoltage Difference //WORKING
-#define cms_bat 6 //set Battery Alert Temperature //NOT IMPLEMENTED
-#define cms_eat 7 //set ESC Alert Temperature //NOT IMPLEMENTED
-#define cms_flashprotection 8 //activate flashprotection //NOT IMPLEMENTED
-#define cms_blekomoot 9 //activate ble/komoot navigaton display //NOT IMPLEMENTED
-#define cms_busmode 10 //busmode active/passive (request data from m365 or not...?) //WORKING
-#define cms_wifirestart 11 //restart wifi //WORKING
-#define cms_changelock 12 //WORKING
-#define cms_turnoff 13 //WORKING
-#define cms_exit 14 //exitmenu //WORKING
-#define configsubscreens 15
-#define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
-#define configlinesabove 2
-#define confignumlines 6
-uint8_t configstartindex = 0;
-uint8_t configendindex = 0;
-bool configchanged = false;
-
 void handle_configmenu() {
   switch(subscreen) {
             case cms_light:
@@ -2001,22 +2027,6 @@ void oled_startscreen() {
   display1.drawBitmap(0,0,  scooter, 64,64, 1);
 }
 
-uint8_t brakebuttonstate = 0;
-boolean brakebuttonpressed = false;
-#define buttonbrakepressed1 60 //treshold for detecting brake as "pressed"
-#define buttonbrakeshortpressedduration 50
-#define buttonbrakelongpressedduration 500
-unsigned long buttonbrakeshortpressedtimestamp = 0;
-unsigned long buttonbrakelongpressedtimestamp = 0;
-
-uint8_t throttlebuttonstate = 0;
-boolean throttlebuttonpressed = false;
-#define buttonthrottlepressed1 150
-#define buttonthrottleshortpressedduration 50
-#define buttonthrottlelongpressedduration 500
-unsigned long buttonthrottleshortpressedtimestamp = 0;
-unsigned long buttonthrottlelongpressedtimestamp = 0;
-
 void oled_switchscreens() {
   uint8_t oldscreen = screen;
   
@@ -2037,35 +2047,51 @@ void oled_switchscreens() {
   
   //"button" handling
     if (newdata & (bleparsed->brake>=buttonbrakepressed1) & !brakebuttonpressed) {
-      buttonbrakeshortpressedtimestamp = millis() + buttonbrakeshortpressedduration;
-      buttonbrakelongpressedtimestamp = millis() + buttonbrakelongpressedduration;
+      buttonbrakepressedtimestamp = millis();
       brakebuttonpressed=true;
       brakebuttonstate=0;
     }
     if (newdata & (bleparsed->brake<buttonbrakepressed1) & brakebuttonpressed) {
-      if (millis()>buttonbrakeshortpressedtimestamp) { 
-        brakebuttonstate=1; //1 = short, 2 = long press
+      if (millis()>buttonbrakepressedtimestamp+buttonbrakelongpressedduration) { 
+        brakebuttonstate=2;
+      } else {
+        if (millis()>buttonbrakepressedtimestamp+buttonbrakeshortpressedduration) { 
+          brakebuttonstate=1;
+        }
       }
-      if (millis()>buttonbrakelongpressedtimestamp) { 
-        brakebuttonstate=2; //1 = short, 2 = long press
-      }
-      brakebuttonpressed=false;
+      if (brakebuttonstate!=0) { brakebuttonpressed=false; }
     }
 
     if (newdata & (bleparsed->throttle>=buttonthrottlepressed1) & !throttlebuttonpressed) {
-      buttonthrottleshortpressedtimestamp = millis() + buttonthrottleshortpressedduration;
-      buttonthrottlelongpressedtimestamp = millis() + buttonthrottlelongpressedduration;
+      buttonthrottlepressedtimestamp = millis();
       throttlebuttonpressed=true;
       throttlebuttonstate=0;
     }
     if (newdata & (bleparsed->throttle<buttonthrottlepressed1) & throttlebuttonpressed) {
-      if (millis()>buttonthrottleshortpressedtimestamp) { 
-        throttlebuttonstate=1; //1 = short, 2 = long press
+      if (millis()>buttonthrottlepressedtimestamp+buttonthrottlelongpressedduration) { 
+        throttlebuttonstate=2;
+      } else {
+        if (millis()>buttonthrottlepressedtimestamp+buttonthrottleshortpressedduration) { 
+          throttlebuttonstate=1;
+        }
       }
-      if (millis()>buttonthrottlelongpressedtimestamp) { 
-        throttlebuttonstate=2; //1 = short, 2 = long press
+      if (throttlebuttonstate!=0) { throttlebuttonpressed=false; }
+    }
+
+    if (newdata & (bleparsed->brake>=buttonbrakepressed1) & (bleparsed->throttle>=buttonthrottlepressed1) & !bothbuttonpressed & screen!=screen_configmenu) {
+      buttonbothpressedtimestamp = millis();
+      bothbuttonpressed=true;
+      bothbuttonstate=0;
+    }
+    if (newdata & (bleparsed->brake<buttonbrakepressed1) & (bleparsed->throttle<buttonthrottlepressed1) & bothbuttonpressed) {
+      if (millis()>buttonbothpressedtimestamp+buttonbothlongpressedduration) { 
+        bothbuttonstate=2;
+      } else {
+        if (millis()>buttonbothpressedtimestamp+buttonbothshortpressedduration) { 
+          bothbuttonstate=1;
+        }
       }
-      throttlebuttonpressed=false;
+      if (bothbuttonstate!=0) { bothbuttonpressed=false; }
     }
   
   //execute commands from configscreen
@@ -2075,7 +2101,8 @@ void oled_switchscreens() {
     }
 
   //switch to configmenu
-    if (brakebuttonstate!=0 & throttlebuttonstate!=0 & escparsed->speed==0) {
+    //if (brakebuttonstate!=0 & throttlebuttonstate!=0 & escparsed->speed==0) {
+    if (bothbuttonstate!=0 & escparsed->speed==0 & screen!=screen_configmenu) {
       screen = screen_configmenu;
       subscreen = 0;
       configchanged = false;
@@ -2188,15 +2215,25 @@ void oled_switchscreens() {
     }
   //reset newdata flag if we consumed it
     if (updatescreen) { newdata=false; }
+  
+  //DebugSerial.printf("### Br: %03d Thr: %03d B: %01d T: %01d BT: %01d Scr: %01d\r\n",escparsed->brake, escparsed->throttle, brakebuttonstate, throttlebuttonstate, bothbuttonstate, screen);
   //reset buttonstate
     brakebuttonstate=0;
     throttlebuttonstate=0;
+    bothbuttonstate=0;
 } //oled_switchscreens
 
 #ifdef useoled1
   void oled1_update() {
     uint8_t line;
     timestamp_oled1draw=micros();
+
+    if (oledreinit) {
+      oled1init();
+      #if !defined useoled2
+        oledreinit=false;
+      #endif
+    }
     display1.clearDisplay();
     
     if (screen==screen_drive) {
@@ -2359,8 +2396,8 @@ void oled_switchscreens() {
                   if (conf_battcells>=6) { display1.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
                   if (conf_battcells>=7) { display1.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
                   if (conf_battcells>=8) { display1.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
-                  if (conf_battcells>=9) { display1.printf("10: %5.3f  ",(float)bmsparsed->Cell10Voltage/1000.0f); }
-                  if (conf_battcells>=10) { display1.printf("09: %5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                  if (conf_battcells>=9) { display1.printf("09: %5.3f  ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                  if (conf_battcells>=10) { display1.printf("10: %5.3f ",(float)bmsparsed->Cell10Voltage/1000.0f); }
                   if (conf_battcells>=11) { display1.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
                   if (conf_battcells>=12) { display1.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
                   display1.printf("Max. Diff: %5.3f", (float)(highest-lowest)/1000.0f);
@@ -2422,15 +2459,15 @@ void oled_switchscreens() {
                display1.printf("ALARMCOUNTERS   (%d/%d)",subscreen, stopsubscreens);
               line = dataoffset+baselineoffset;
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("BMS Temp:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",alertcounter_bmstemp);
+                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(96,line); display1.printf("%03d",alertcounter_bmstemp);
                 //display1.setCursor(119,line); display1.setFont(); display1.print("V");
               line = dataoffset+baselineoffset*2+linespace;
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("ESC Temp:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",alertcounter_esctemp);
+                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(96,line); display1.printf("%03d",alertcounter_esctemp);
                 //display1.setCursor(119,line); display1.setFont(); display1.print("%");
               line = dataoffset+baselineoffset*3+linespace*2;
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("CellVoltage:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",alertcounter_cellvoltage);
+                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(96,line); display1.printf("%03d",alertcounter_cellvoltage);
                 //display1.setCursor(119,line); display1.setFont(); display1.print("#");
               break;
           }
@@ -2707,6 +2744,10 @@ void oled_switchscreens() {
   void oled2_update() {
     uint8_t line;
     timestamp_oled2draw=micros();
+    if (oledreinit) {
+      oled2init();
+      oledreinit=false;
+    }
     display2.clearDisplay();
     if (screen==screen_drive) {
         //Watt
@@ -2925,30 +2966,35 @@ void handle_oled() {
   //screen=screen_timeout;
   //screen=screen_error; escparsed->error=12;
   //screen=screen_stop; subscreen=4;
-
+  if (millis() > oledreinittimestamp) {
+      oledreinit = true;
+      oledreinittimestamp = millis() + oledreinitduration;
+  }
 
   #ifdef useoled2 //workaround for slow i2c & 2 displays to avoid too long blocking of main code
     if (updatescreen2) {
       oled2_update();
       updatescreen2=false;
       //DebugSerial.printf("---OLED2----- %02d %d\r\n",screen, millis());
+    } else {
+  #endif
+      if (updatescreen) {
+        olednextrefreshtimestamp=millis()+oledrefreshanyscreen;
+        oled1_update();
+        //oled2_update();
+        updatescreen=false;
+        //DebugSerial.printf("---OLED1----- %02d %d\r\n",screen, millis());
+      }
+  #ifdef useoled2
     }
   #endif
-  if (updatescreen) {
-    olednextrefreshtimestamp=millis()+oledrefreshanyscreen;
-    oled1_update();
-    //oled2_update();
-    updatescreen=false;
-    //DebugSerial.printf("---OLED1----- %02d %d\r\n",screen, millis());
-  }
   duration_oled = micros()-timestamp_oledstart;
   oled_blink!=oled_blink;
 }
 #endif
 
-void setup() {
-  start_m365();
 #ifdef useoled1
+void oled1init() {
   #ifdef usei2c
     display1.begin(SSD1306_SWITCHCAPVCC, oled1_address, false, oled_sda, oled_scl, 800000UL);
   #else
@@ -2959,23 +3005,36 @@ void setup() {
   display1.setFont();
   display1.setTextSize(1);
   display1.clearDisplay();
-  oled_startscreen();
-  display1.display();
+}
 #endif
+
 #ifdef useoled2
+void oled2init() {
   #ifdef usei2c
     display2.begin(SSD1306_SWITCHCAPVCC, oled2_address, false,oled_sda, oled_scl, 800000UL);
   #else
     display2.begin(SSD1306_SWITCHCAPVCC);
   #endif
-  display1.setRotation(0);
-  oled_startscreen();
-  display1.setRotation(OLED1_ROTATION); //upside down
   display2.setTextColor(WHITE);
   display2.setFont();
   display2.setTextSize(1);
+  display2.clearDisplay();
+}
+#endif
+
+void setup() {
+  start_m365();
+#ifdef useoled1
+  oled1init();
+  oled_startscreen();
+  display1.display();
+#endif
+#ifdef useoled2
+  oled2init();
+  display1.setRotation(0);
+  oled_startscreen();
+  display1.setRotation(OLED1_ROTATION); //upside down
   display2.display();
-  //display2.startscrollright(1,64);
 #endif
 #if defined useoled1 || defined useoled2
   delay(2000);
@@ -2994,13 +3053,13 @@ void setup() {
   #endif
   #ifdef ESP32
     DebugSerial.begin(115200);
-    preferences.begin("my-app", false);
+    /*preferences.begin("my-app", false);
     unsigned int counter = preferences.getUInt("counter", 0);
     counter++;
     Serial.printf("Current counter value: %u\r\n", counter);
     preferences.putUInt("counter", counter);
     preferences.end();
-
+*/
     loadconfig();
   #endif
   #ifdef ESP8266
