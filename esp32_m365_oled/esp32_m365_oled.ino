@@ -1,15 +1,13 @@
-//current version working on esp32 ONLY
-//esp8266 has no preferences class, i'm not using esp8266 anymore, if someone implements load/saveconfig methods for esp8266 i'm happy to merge your pull-request
+//Menu: Add Value Changer for Temp-Alerts
+//Clean readme.md
+//commit/push
 
-//needs patch in esp32-arduino-core/esp32-hal-uart.c -> see comments in uart-section below and patch yourself or use https://github.com/smartinick/arduino-esp32
-//needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer) -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
+//add option for miles / kilometers -> simply add it to wheelsize/factor stuff
+//todo: add conf_unit handling to applyconfig
+//add option in menu for beeping on alert
+//add alert / treshold for low battery -> make use of alertcounter_undervoltage
 
-/* known BUGS: 
- * - apssid/appassword not applied when switching from client-mode/search to AP
- * - does not receive/decode all data after doing OTA, reboot once and it works
- */
-
-//MEnu: Add Value Changer for Temp-Alerts
+//add alertcounter_escerror to error screen.... -> commit "added esc-errorchecking to housekeeper"
 //new font
 //menu formating
 //add popup "window" with/without timeout for popup/alerts (rectangle over content,...)
@@ -25,144 +23,29 @@
 
 //LOCKED AND SPEED? BLINK/ALERT!!!!
 
-#ifdef ESP32
-  #include <WiFi.h>
-  #include <WiFiUdp.h>
-  #include <Update.h> //needed for arduinoOTA on esp32
-  #include <Preferences.h>
-  
-#elif defined(ESP8266)
-  #error "Preferences not supported on ESP8266"
-  #include <ESP8266WiFi.h>
-  #include <WiFiUdp.h>
-  WiFiEventHandler stationConnectedHandler;
-  WiFiEventHandler stationDisconnectedHandler;
-#else
-  #error Platform not supported
-#endif
 
-//#include <endian.h>
-#include <ArduinoOTA.h>
+//******************************************
+//*************************************
+//START OF File:
+//current version working on esp32 ONLY
+//esp8266 has no preferences class, i'm not using esp8266 anymore, if someone implements load/saveconfig methods for esp8266 i'm happy to merge your pull-request
+
+//needs patch in esp32-arduino-core/esp32-hal-uart.c -> see comments in uart-section below and patch yourself or use https://github.com/smartinick/arduino-esp32
+//needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer) -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
+
+/* known BUGS: 
+ * - apssid/appassword not applied when switching from client-mode/search to AP
+ * - does not receive/decode all data after doing OTA, reboot once and it works
+ */
+
+//please update config.h to reflect your hardwaresetup
+
+#include "config.h"
+#include "strings.h"
 
 #define swversion "18.09.17"
 
-//scooter config
-  //Info: batt12s and wheelsize have been removed --> implemented via configmenu, default 10s batt and 8.5" wheel
-
-//Hardwareconfig
-  #define useoled1 //comment out to disable oled functionality
-  #define useoled2
-  //#define usei2c //if not defined, spi will be used, please see pin definitions below (#define oled_scl/sda/mosi/clk/...)
-  #define OLED1_ROTATION 2 //0 = normal, 1= 90, 2=180, 3=270° CW
-
-
-  //#define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
-
-  #ifdef developermode
-    //detailed config
-      //#define usewlanclientmode //NOT IMPLEMENTED comment out to disable Wifi Client functionality
-      //#define usewlanapmode //NOT IMPLEMENTED  comment out to disable Wifi Access Poiint functionality
-      #define usetelnetserver //comment out to disable telnet status/telemetrie server, this also disables RAW Server (so only mqtt might be left for leaving wifi activated)
-      //#define userawserver //comment out to disable RAW Serial Data BUS Stream on Port 36524, NOT VERIFIED against wired-data-stream
-      #define usepacketserver //comment out to disable PACKET Decode on Port 36525
-      //#define usemqtt //NOT IMPLEMENTED comment out to disable mqtt functionality
-      //#define usestatusled //if enabled update "#define led" with gpionum; 10% dutycycle while searching for known wlans, 50% dutycycle while in wlan client/accesspoint mode, ON if client connected, off if wlan is turned off
-    //DEBUG Settings
-      //#define debug_dump_states //dump state machines state
-      //#define debug_dump_rawpackets //dump raw packets to Serial/Telnet
-      //#define debug_dump_packetdecode //dump infos from packet decoder
-  #endif
-  
-
-//Configuration Settings (should be adopted to personal desires)
-
-  //Wifi - CHANGE IT TO YOUR OWN SETTINGS!!!
-    #define maxssids 1
-    #define ssid1 "m365dev"
-    #define password1 "h5fj8bvothrfd65b4"
-    #define ssid2 "..."
-    #define password2 "..."
-    #define ssid3 "..."
-    #define password3 "..."
-
-  //SSID/Pass for Access-Point Mode - CHANGE IT TO YOUR OWN SEQUENCE!!!
-    const char *apssid ="m365oled";
-    const char *appassword="365";
-  
-  //#define staticip //use static IP in Client Mode, Comment out for DHCP
-    #ifdef staticip //static IP for Client Mode, in AP Mode default is 192.168.4.1/24
-      IPAddress ip(192,168,0,149);
-      IPAddress gateway(192,168,0,1);
-      IPAddress dns(192,168,0,1);
-      IPAddress subnet(255,255,255,0);
-    #endif
-
-  //MQTT - NOT USED YET
-    #ifdef usemqtt
-      #include <PubSubClient.h>
-      #define mqtt_clientID "m365"
-      #define mqtt_server "192.168.0.31"
-      #define mqtt_port 1883
-    #endif
-
-  //Over The Air Firmwareupdates - password - CHANGE IT TO YOUR OWN SEQUENCE!!!
-    #define OTApwd "h5fj8ovbthrfd65b4"
-
-
-
 //usually nothing must/should be changed below
-
-//OLED
-#if (!defined useoled1 && defined useoled2)
-    #error "useoled2 defined, but useoled1 not defined"
-#endif
-
-#if (!defined ESP32 && !defined usei2c)
-    #error "Hardware SPI only tested on ESP32!!!"
-#endif
-
-#if (defined useoled1 || defined useoled2)
-    #include <Adafruit_SSD1306.h>
-#endif
-
-#if (defined usei2c && defined useoled1) //one display, I2C Mode
-  #ifdef ESP32
-    //#define oled_scl GPIO_NUM_4 //working wemos fake board
-    //#define oled_sda GPIO_NUM_16 //working wemos fake board
-    #define oled_scl GPIO_NUM_32 //SCLK Pad on PCB
-    #define oled_sda GPIO_NUM_33 //MOSI Pad on PCB
-  #endif
-  #ifdef ESP8266
-    #define oled_scl GPIO_NUM_4
-    #define oled_sda GPIO_NUM_5
-  #endif
-  #define oled_reset -1
-  #define oled1_address 0x3C
-#endif
-
-#if (defined usei2c && defined useoled2) //2nd display, i2c mode
-    #define oled2_address 0x3D
-#endif
-
-#if (!defined usei2c && defined useoled1 && defined ESP32) //one display, ESP32/Hardware SPI Mode
-    #define OLED_MISO   GPIO_NUM_19 //this is just a unused GPIO pin - SPI Lib needs a MISO Pin, display off course not :D
-    #define OLED_MOSI   GPIO_NUM_33
-    #define OLED_CLK    GPIO_NUM_32
-    #define OLED_DC     GPIO_NUM_25
-    //OLED1 on OLED1 Connector:
-      #define OLED1_CS    GPIO_NUM_26
-      #define OLED1_RESET GPIO_NUM_27
-    //OLED1 on OLED2 Connector:
-      //#define OLED1_CS    GPIO_NUM_14
-      //#define OLED1_RESET GPIO_NUM_12
-      //#define OLED1_ROTATION 0
-#endif
-
-#if (!defined usei2c && defined useoled2 && defined ESP32) //2nd display, ESP32/Hardware SPI Mode
-    #define OLED2_CS    GPIO_NUM_14
-    #define OLED2_RESET GPIO_NUM_12
-#endif
-
 
 #if (defined usei2c && defined useoled1)
     Adafruit_SSD1306 display1(oled_reset);
@@ -172,25 +55,30 @@
 #endif
 
 #if (!defined usei2c && defined useoled1)
-    //software spi
-    //Adafruit_SSD1306 display1(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS);
+    //software spi Adafruit_SSD1306 display1(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS);
     //hardware spi with patched Adafruit_SSD1306 Library:
     Adafruit_SSD1306 display1(OLED_MISO, OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS, 4000000UL);
 #endif
 #if (!defined usei2c && defined useoled2)
-    //software spi
-    //Adafruit_SSD1306 display2(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED2_CS);
+    //software spi Adafruit_SSD1306 display2(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED2_CS);
     //hardware spi
     Adafruit_SSD1306 display2(OLED_MISO, OLED_MOSI, OLED_CLK, OLED_DC, OLED2_RESET, OLED2_CS, 4000000UL);
 #endif
 
 #if (defined useoled1 || defined useoled2)
     #include <Adafruit_GFX.h>
-    #include <Fonts/FreeSansOblique24pt7b.h>
-    #include <Fonts/FreeSans18pt7b.h>
-    #define fontbig FreeSansOblique24pt7b
+    #include <Fonts/ARIALNB9pt7b.h> //Arial Narrow Bold Size 9 "33" = 15x13px
+    #include <Fonts/ARIALN9pt7b.h> //Arial Narrow Size 9 "33" = 15x13px
+    #include <Fonts/ariblk42pt7b.h> //Arial Black Size 42 "33" = 101x61px
+    #include <Fonts/ARIALNB18pt7b.h> //Arial Narrow Bold Size 18 "33" = 30x25px
+
+
+//old stuff, clean up:
+//    #include <Fonts/FreeSansOblique24pt7b.h>
+//    #include <Fonts/FreeSans18pt7b.h>
+//    #define fontbig FreeSansOblique24pt7b
     #define fontbigbaselinezero 32
-    #define fontbigheight 36
+//    #define fontbigheight 36
     #include <Fonts/FreeSansBold9pt7b.h>
     #include <Fonts/FreeSans9pt7b.h>
     #define fontsmall FreeSansBold9pt7b
@@ -220,6 +108,27 @@
     #define oledreinitduration 30000
     unsigned long oledreinittimestamp = 0;
 
+
+    //buffers for drawscreen stuff
+    #define dsvalbuflen 10
+    char val1buf[dsvalbuflen];
+    char val2buf[dsvalbuflen];
+    char val3buf[dsvalbuflen];
+    char val4buf[dsvalbuflen];
+
+//move to screen.h START
+  #define sp_lx 0
+  #define sp_fontlabel &ARIALN9pt7b
+  #define sp_dx 64
+  #define sp_dxnu 80
+  #define sp_fontdata &ARIALNB9pt7b
+  #define sp_ux 104
+  #define sp_fontunit
+
+  #define menu_x 1
+  #define menu_fontlabel &ARIALN9pt7b
+  #define menu_fontlabelselected &ARIALNB9pt7b
+  #define menu_fontdata &ARIALNB9pt7b
 
     static const unsigned char PROGMEM scooter [] PROGMEM = {
       0x00, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -332,55 +241,6 @@
   String BELL     = "\a";
 #endif
 
-
-//M365 - serial
-  /* ATTENZIONE - the Arduino Serial Library uses HardwareSerial from the arduino-esp32 core which uses "esp32-hal-uart.cpp" driver from esp-idf which runs on RTOS
-  * ESP32 has 128Byte Hardware RX Buffer
-  * esp32-hal-uart uses interrupts, but default config toggles the rx-event only after 112 received bytes
-  * this leads to the problem -> on m365 we must listen to the packets sent by other nodes (bms/esc/ble modules) and send our stuff with the right timing
-  * so long explanation, short solution:
-  * in esp32-hal-uart.c, in void uartEnableInterrupt(uart_t* uart) change
-  * uart->dev->conf1.rxfifo_full_thrhd = 112;
-  * to
-  *  uart->dev->conf1.rxfifo_full_thrhd = 1;
-  */
-  //#define UART2RX GPIO_NUM_5 //TTGO Test board
-  //#define UART2TX GPIO_NUM_17 //TTGO Test board
-  //#define UART2RXunused GPIO_NUM_23 //TTGO Test board; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
-
-  //custom pins see here: http://www.iotsharing.com/2017/05/how-to-use-serial-arduino-esp32-print-debug.html?m=1
-  //enable rx/tx only  modes see: https://github.com/esp8266/Arduino/blob/master/cores/esp8266/HardwareSerial.h
-  #ifdef ESP32
-    #define DebugSerial Serial //Debuguart = default Serial Port/UART0
-    HardwareSerial M365Serial(2);  // UART2for M365
-    /* wemos test board
-    #define UART2RX GPIO_NUM_23 //Wemos board
-    #define UART2TX GPIO_NUM_5 //Wemos board
-    #define UART2RXunused GPIO_NUM_19 //TTGO Test board; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
-    */
-    #define UART2RX GPIO_NUM_23 //PCB v180723
-    #define UART2TX GPIO_NUM_22 //PCB v180723
-    //#define UART2RX GPIO_NUM_22 //PCB v180723 FIX SWAP
-    //#define UART2TX GPIO_NUM_23 //PCB v180723 FIX SWAP
-    #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
-
-    #define M365SerialFull M365Serial.begin(115200,SERIAL_8N1, UART2RX, UART2TX);
-    //#define Serial1RX M365Serial.begin(115200,SERIAL_8N1, UART2RX, -1)
-    #define M365SerialTX M365Serial.begin(115200,SERIAL_8N1, UART2RXunused, UART2TX);
-  #elif defined(ESP8266)
-    #define DebugSerial Serial1 //UART1 is TX only, will be mapped to GPIO2 (-> Debug output will be there)
-    #define M365Serial Serial  // UART0 will be remapped to GPIO 13(RX) / 15 (TX) and used for M365 Communication
-    //#define UART2RX 2 //Wemos board
-    //#define UART2TX 4 //Wemos board
-
-    #define M365SerialFull M365Serial.begin(115200,SERIAL_8N1, (SerialMode)UART_FULL); M365Serial.swap();
-    //#define Serial1RX M365Serial.begin(115200,SERIAL_8N1, UART_RX_ONLY, UART2RX, UART2TX); M365Serial.swap();
-    #define M365SerialTX M365Serial.begin(115200,SERIAL_8N1, (SerialMode)UART_TX_ONLY); M365Serial.swap();
-
-
-    //TEST M365Serial.setRxBufferSize(1);
-  #endif
-
 //M365 - serial receiver
   #define maxlen 256 //serial buffer size in bytes
   uint8_t crc1=0;
@@ -446,8 +306,6 @@
   uint16_t te_max = 0;  //temperature esc max
   uint16_t lowest=10000; //Cell Voltages - Lowest
   uint16_t highest=0; //Cell Voltages - Highest
-
-
 
   #define m365packettimeout  500 //timeout in ms after last received packet for showing connection-error
   unsigned long m365packettimestamp = 0;
@@ -701,18 +559,19 @@
   #define cms_cruise 1 //cruise mode on/off //WORKING
   #define cms_kers 2 //set kers //WORKING
   #define cms_ws 3 //set wheelsize //WORKING
-  #define cms_bc 4 //set number of cells (10/12s) //WORKING
-  #define cms_bac 5 //set Battery Alert CellVoltage Difference //WORKING
-  #define cms_bat 6 //set Battery Alert Temperature //NOT IMPLEMENTED
-  #define cms_eat 7 //set ESC Alert Temperature //NOT IMPLEMENTED
-  #define cms_flashprotection 8 //activate flashprotection //NOT IMPLEMENTED
-  #define cms_blekomoot 9 //activate ble/komoot navigaton display //NOT IMPLEMENTED
-  #define cms_busmode 10 //busmode active/passive (request data from m365 or not...?) //WORKING
-  #define cms_wifirestart 11 //restart wifi //WORKING
-  #define cms_changelock 12 //WORKING
-  #define cms_turnoff 13 //WORKING
-  #define cms_exit 14 //exitmenu //WORKING
-  #define configsubscreens 15
+  #define cms_unit 4 //kilometers or miles?
+  #define cms_bc 5 //set number of cells (10/12s) //WORKING
+  #define cms_bac 6 //set Battery Alert CellVoltage Difference //WORKING
+  #define cms_bat 7 //set Battery Alert Temperature //NOT IMPLEMENTED
+  #define cms_eat 8 //set ESC Alert Temperature //NOT IMPLEMENTED
+  #define cms_flashprotection 9 //activate flashprotection //NOT IMPLEMENTED
+  #define cms_blekomoot 10 //activate ble/komoot navigaton display //NOT IMPLEMENTED
+  #define cms_busmode 11 //busmode active/passive (request data from m365 or not...?) //WORKING
+  #define cms_wifirestart 12 //restart wifi //WORKING
+  #define cms_changelock 13 //WORKING
+  #define cms_turnoff 14 //WORKING
+  #define cms_exit 15 //exitmenu //WORKING
+  #define configsubscreens 16
   #define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
   #define configlinesabove 2
   #define confignumlines 6
@@ -772,6 +631,7 @@
   uint8_t conf_alert_batt_celldiff;
   uint8_t conf_alert_batt_temp;
   uint8_t conf_alert_esc_temp;
+  uint8_t conf_unit;
   bool conf_flashprotect;
   bool conf_espbusmode;
   #define wheelfact10 1.1764705882352941176470588235294f
@@ -789,12 +649,15 @@
   unsigned long housekeepertimestamp = housekeepertimeout;
 
 //alerts
+  bool alert_escerror = false;
   bool alert_cellvoltage = false;
   bool alert_bmstemp = false;
   bool alert_esctemp = false;
+  uint16_t alertcounter_escerror = 0;
   uint16_t alertcounter_cellvoltage = 0;
   uint16_t alertcounter_bmstemp = 0;
   uint16_t alertcounter_esctemp = 0;
+  uint16_t alertcounter_undervoltage = 0;
 
 //buttonhandling
   uint8_t brakebuttonstate = 0;  //1 = short, 2 = long press
@@ -816,6 +679,8 @@
   #define buttonbothshortpressedduration 50 //millis needed for short press
   #define buttonbothlongpressedduration 500 //millis needed for long press
   unsigned long buttonbothpressedtimestamp = 0;
+
+//and finally.... *tada* the start of code.... :D
 
 void reset_statistics() {
   packets_rec=0;
@@ -909,6 +774,13 @@ void handle_housekeeper() {
     case hkrequesting: //waiting until we received data...
     break;
   case hkevaluating: //evaluate alarms,... rearm timeout
+    //check error register
+      if (escparsed->error!=0) {
+        if (!alert_escerror) {
+          alertcounter_escerror++;
+          alert_escerror = true;
+        }
+      }
     //cell voltage difference alarm:
       m365_updatebattstats();
       if ((highest-lowest)*100 >= conf_alert_batt_celldiff) {
@@ -1892,6 +1764,8 @@ void handle_led() {
 
 
 void applyconfig() {
+  //TODO - add conf_unit
+
   if (conf_wheelsize==0) { wheelfact = wheelfact8; }
   if (conf_wheelsize==1) { wheelfact = wheelfact10; }
 }
@@ -1905,6 +1779,7 @@ void loadconfig() {
   conf_alert_esc_temp = preferences.getUChar("alertesctemp", 50);  //50° Celsius -> alert
   conf_flashprotect = preferences.getBool("flashprotect",false);
   conf_espbusmode = preferences.getBool("busmode",true); //false = ESP does not request data, true = ESP requests data
+  conf_unit = preferences.getUChar("unit",0); //unit: 0 = kilmeters, 1 = miles
   preferences.end();
   applyconfig();
 }
@@ -1919,6 +1794,7 @@ void saveconfig() {
   preferences.putUChar("alertesctemp", conf_alert_esc_temp);  //50° Celsius -> alert
   preferences.putBool("flashprotect",conf_flashprotect);
   preferences.putBool("busmode",conf_espbusmode); //false = ESP does not request data, true = ESP requests data
+  preferences.putUChar("unit",conf_unit); //unit: 0 = kilmeters, 1 = miles
   preferences.end();
 }
 
@@ -1949,6 +1825,14 @@ void handle_configmenu() {
                     conf_wheelsize=1; 
                   } else {
                     conf_wheelsize=0; 
+                  }
+                  configchanged = true;
+              break;
+            case cms_unit: 
+                if (conf_unit==0) { 
+                    conf_unit=1; 
+                  } else {
+                    conf_unit=0; 
                   }
                   configchanged = true;
               break;
@@ -2011,7 +1895,10 @@ void handle_configmenu() {
 } //handle_configmenu
 
 
-void oled_startscreen() {
+//screendrawing start MOVE TO SCREEN.C START
+
+
+void drawscreen_startscreen() {
   display1.setFont();
   display1.setTextSize(1);
   display1.setTextColor(WHITE);
@@ -2027,6 +1914,133 @@ void oled_startscreen() {
   display1.drawBitmap(0,0,  scooter, 64,64, 1);
 }
 
+void drawscreen_header(const char *h, uint8_t scrnum, uint8_t scrtotal) {
+  display1.setFont();
+  display1.setCursor(0,0);
+  if (scrtotal!=0) {
+    display1.printf("%15.15s (%d/%d)\r\n",FPSTR(h),scrnum,scrtotal);
+  } else {
+    display1.printf("%21.21s\r\n",FPSTR(h));
+  }
+}
+
+
+void drawscreen_data(bool headline, uint8_t lines, bool showunits,
+               const char *l1, char *v1, const char *u1,
+               const char *l2, char* v2, const char *u2,
+               const char *l3, char* v3, const char *u3,
+               const char *l4, char* v4, const char *u4) {
+  uint8_t i;
+  uint8_t line;
+  for (i=0;i<lines;i++) {
+      switch(i) {
+        case 0:
+            if (headline & lines==4) { line = dataoffset+baselineoffset; }
+            if (!headline & lines==4) { line = baselineoffset; }
+            if (headline & lines==3) { line = dataoffset+baselineoffset+5;}
+            if (!headline & lines==3) { line = baselineoffset; }
+            display1.setFont(sp_fontlabel); display1.setCursor(sp_lx,line); display1.print(FPSTR(l1));
+            if (showunits) {
+              display1.setFont(sp_fontdata); display1.setCursor(sp_dx,line); display1.printf(v1);
+              display1.setCursor(sp_ux,line); display1.setFont(sp_fontunit); display1.print(FPSTR(u1));
+            } else {
+              display1.setFont(sp_fontdata); display1.setCursor(sp_dxnu,line); display1.printf(v1);
+            }
+          break;
+        case 1:
+            if (headline & lines==4) { line = dataoffset+baselineoffset*2+linespace; }
+            if (!headline & lines==4) { line = baselineoffset*2+linespace+2;}
+            if (headline & lines==3) { line = dataoffset+baselineoffset*2+10; }
+            if (!headline & lines==3) { line = baselineoffset*2+5+4; }
+            display1.setFont(sp_fontlabel); display1.setCursor(sp_lx,line); display1.print(FPSTR(l2));
+            if (showunits) {
+              display1.setFont(sp_fontdata); display1.setCursor(sp_dx,line); display1.printf(v2);
+              display1.setCursor(sp_ux,line); display1.setFont(sp_fontunit); display1.print(FPSTR(u2));
+            } else {
+              display1.setFont(sp_fontdata); display1.setCursor(sp_dxnu,line); display1.printf(v2);
+            }
+          break;
+        case 2:
+            if (headline & lines==4) { line = dataoffset+baselineoffset*3+linespace*2; }
+            if (!headline & lines==4) { line = baselineoffset*3+linespace*2+5;}
+            if (headline & lines==3) { line = dataoffset+baselineoffset*3+15; }
+            if (!headline & lines==3) { line = baselineoffset*3+10+8; }
+            display1.setFont(sp_fontlabel); display1.setCursor(sp_lx,line); display1.print(FPSTR(l3));
+            if (showunits) {
+              display1.setFont(sp_fontdata); display1.setCursor(sp_dx,line); display1.printf(v3);
+              display1.setCursor(sp_ux,line); display1.setFont(sp_fontunit); display1.print(FPSTR(u3));
+            } else {
+              display1.setFont(sp_fontdata); display1.setCursor(sp_dxnu,line); display1.printf(v3);
+            }
+          break;
+        case 3:
+            if (headline & lines==4) { line = dataoffset+baselineoffset*4+linespace*3; }
+            if (!headline & lines==4) { line = baselineoffset*4+linespace*3+8;}
+            display1.setFont(sp_fontlabel); display1.setCursor(sp_lx,line); display1.print(FPSTR(l4));
+            if (showunits) {
+              display1.setFont(sp_fontdata); display1.setCursor(sp_dx,line); display1.printf(v4);
+              display1.setCursor(sp_ux,line); display1.setFont(sp_fontunit); display1.print(FPSTR(u4));
+            } else {
+              display1.setFont(sp_fontdata); display1.setCursor(sp_dxnu,line); display1.printf(v4);
+            }
+          break;
+      } //Switch i
+  } //for i
+} //drawscreen
+
+void drawscreen1_drive() {
+  display1.clearDisplay();
+  display1.setFont(&ariblk42pt7b);
+  display1.setCursor(0,62);
+  display1.print("33");
+  display1.setFont(&ARIALNB18pt7b);
+  display1.setCursor(108,28);
+  display1.print("3");
+  display1.setFont(&ARIALNB9pt7b);
+  display1.setCursor(118,45);
+  display1.print("L");
+  display1.setCursor(118,63);
+  display1.print("N");
+  display1.display();
+}
+
+void drawscreen2_drive() {
+  display2.clearDisplay();
+  //display2.drawFastHLine(0,31,128,WHITE);
+  //display2.drawFastVLine(64,0,64,WHITE);
+  display2.setFont(&ARIALNB18pt7b); display2.setCursor(0,31); display2.printf("%03d", 888);
+  display2.setFont(&ARIALN9pt7b); display2.setCursor(50,31); display2.print("W");
+  display2.setFont(&ARIALNB18pt7b); display2.setCursor(65,31); display2.printf("%03d",100);
+  display2.setFont(&ARIALN9pt7b); display2.setCursor(116,31); display2.print("%");
+  display2.setFont(&ARIALNB18pt7b); display2.setCursor(0,63); display2.printf("%03d", 38);
+  display2.setFont(&ARIALN9pt7b); display2.setCursor(50,63); display2.print("V");
+  display2.setFont(&ARIALNB18pt7b); display2.setCursor(65,63); display2.printf("%03d",15);
+  display2.setFont(&ARIALN9pt7b); display2.setCursor(116,63); display2.print("A");
+  display2.display();
+}
+
+void drawscreen_screenconfigsingle() {
+  uint8_t line = baselineoffset;
+    display1.setFont(menu_fontlabel); display1.setCursor(menu_x,line); display1.print("conf entry 1");
+  line = baselineoffset*2+linespace+1;
+    display1.setFont(menu_fontlabelselected); display1.setCursor(menu_x,line); display1.print("conf entry selecte");
+  line = baselineoffset*3+linespace*2+3;
+    display1.setFont(menu_fontlabel); display1.setCursor(menu_x,line); display1.print("conf entry 2");
+  
+  display1.drawRect(120,0,8,64,BLACK);
+  display1.drawRect(0,baselineoffset*2+linespace-12,122,16,WHITE);
+  //display1.drawFastVLine(125,0,line+2,WHITE);  
+  display1.drawFastVLine(126,0,line+2,WHITE);
+  display1.drawRect(125,15,3,10,WHITE);
+
+  display1.drawFastHLine(0,baselineoffset*3+linespace*2+3+4,128,WHITE);
+  line = baselineoffset*4+linespace*3+8;
+  display1.setFont(menu_fontdata); display1.setCursor(menu_x,63); display1.print("current value");
+}
+
+
+//screendrawing start MOVE TO SCREEN.C END
+//screendrawing stop
 void oled_switchscreens() {
   uint8_t oldscreen = screen;
   
@@ -2237,59 +2251,22 @@ void oled_switchscreens() {
     display1.clearDisplay();
     
     if (screen==screen_drive) {
-      #ifdef useoled2
-        //speed  
-          display1.setCursor(0,fontbigbaselinezero-5);
-          display1.setFont(&fontbig);
-          display1.printf("%04.1f", abs((float)escparsed->speed/1000.0f*wheelfact));
-          display1.setFont();
-          display1.setCursor(84,28);
-          display1.println("km/h");
-        //distance
-          display1.setFont(&FreeSans18pt7b);
-          display1.setCursor(0,63);
-          //display1.printf("%6d", bmsparsed->remainingpercent);
-          display1.printf("%04.1f",(float)escparsed->tripdistance/100.0f*wheelfact);
-          display1.setFont();
-          display1.setCursor(68,line8); 
-          display1.print("km");
-        /*//batt percent  
-          display1.setFont(&FreeSans9pt7b); 
-          display1.setCursor(86,dataoffset+baselineoffset*4+linespace*3-2); 
-          display1.printf("%3d%%",bmsparsed->remainingpercent);
-          */
-          //remaining distance  
-          display1.setFont(&FreeSans9pt7b); 
-          display1.setCursor(84,63);
-          display1.printf("%03.1f",(float)escparsed->remainingdistance/100.0f);
-          display1.setFont();
-          display1.setCursor(116,line8);
-          display1.println("km");
-      #else          
-        //Speed
-          display1.setCursor(0,fontbigbaselinezero-5);
-          display1.setFont(&fontbig);
-          display1.printf("%04.1f", abs((float)escparsed->speed/1000.0f*wheelfact));
-          display1.setFont();
-          display1.setCursor(84,28);
-          display1.print("km/h");
-        //Watt
-          display1.setFont(&FreeSans18pt7b);
-          display1.setCursor(0,63);
-          display1.printf("%04.0f",((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
-          display1.setFont();
-          display1.setCursor(78,line8); 
-          display1.print("W");
-        //batt percent  
-          display1.setFont(&FreeSans9pt7b); 
-          //display1.setFont(&FreeSans18pt7b);
-          //display1.setCursor(86,dataoffset+baselineoffset*4+linespace*3-2); 
-          display1.setCursor(90,63);
-          display1.printf("%02d",bmsparsed->remainingpercent);
-          display1.setFont();
-          display1.setCursor(122,line8); 
-          display1.print("%");
-      #endif
+        display1.setFont(&ariblk42pt7b);
+        display1.setCursor(0,62);
+        display1.printf("%02f", abs((float)escparsed->speed/1000.0f*wheelfact));
+        display1.setFont(&ARIALNB18pt7b);
+        display1.setCursor(108,28);
+        display1.printf("%01d", uint16_t((float)escparsed->speed/100.0f*wheelfact) %10);       display1.setFont(&ARIALNB9pt7b);
+        if (x1parsed->light==0x64) { 
+          display1.setCursor(118,45);
+          display1.print("L");
+        }
+        display1.setCursor(118,63);
+        if (x1parsed->mode<2) { 
+          display1.print("N"); //normal mode
+        } else {
+          display1.print("E"); //eco mode
+        }
     }
     if (screen==screen_stop) {
           display1.setFont();
@@ -2298,7 +2275,21 @@ void oled_switchscreens() {
           switch (subscreen) {
 
             case stopsubscreen_trip: //Trip Info: Average Speed, Distance, Time, Average Speed 
+                drawscreen_header(FPSTR(headline_tripinfo),0,0);
+                sprintf(val1buf,"%05.2f",(float)escparsed->averagespeed/1000.0f*wheelfact);
+                sprintf(val2buf,"%05.2f",(float)escparsed->tripdistance/100.0f*wheelfact);
+                sprintf(val3buf,"%02d:%02d",escparsed->triptime/60,escparsed->triptime % 60);
+                sprintf(val4buf,"%05.2f",(float)escparsed->remainingdistance/100.0f);
+                  drawscreen_data(true, 4, true,
+                      FPSTR(label_averageshort),&val1buf[0],FPSTR(unit_speed),
+                      FPSTR(label_distanceshort),&val2buf[0],FPSTR(unit_distance),
+                      FPSTR(label_time),&val3buf[0],FPSTR(label_seconds),
+                      FPSTR(label_remainingshort),&val4buf[0],FPSTR(unit_distance));
+
+
+                /*
                 display1.print("TRIP Info");
+
                 //display1.drawFastHLine(0,8,128,WHITE);
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset); display1.print("Avg:");
                 display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset); display1.printf("%05.2f",(float)escparsed->averagespeed/1000.0f*wheelfact);
@@ -2313,10 +2304,23 @@ void oled_switchscreens() {
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*4+linespace*3); display1.print("Rem:");
                 display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset*4+linespace*3); display1.printf("%05.2f",(float)escparsed->remainingdistance/100.0f);
                 display1.setCursor(100,dataoffset+baselineoffset*4+linespace*3); display1.setFont(); display1.print("km");
+                */
               break;
               #if !defined useoled2
                 case stopsubscreen_temp: //Single
-                    display1.printf("TEMPERATURE     (%d/%d)",subscreen,stopsubscreens);
+                    //display1.printf("TEMPERATURE     (%d/%d)",subscreen,stopsubscreens);
+                    drawscreen_header(FPSTR(headline_temperature),subscreen,stopsubscreens);
+                    sprintf(val1buf,"%4.1f",(float)bmsparsed->temperature[0]-20.0f);
+                    sprintf(val2buf,"%4.1f",(float)bmsparsed->temperature[1]-20.0f);
+                    sprintf(val3buf,(float)escparsed->frametemp2/10.0f);
+                    drawscreen_data(true, 3, true,
+                      FPSTR(label_batt1),&val1buf[0],FPSTR(unit_temp),
+                      FPSTR(label_batt2),&val2buf[0],FPSTR(unit_temp),
+                      FPSTR(label_esc),&val3buf[0],FPSTR(unit_temp),
+                      NULL,NULL,NULL);
+
+
+                  /*
                   line = dataoffset+baselineoffset;
                     display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Batt1:");
                     display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)bmsparsed->temperature[0]-20.0f);  
@@ -2329,6 +2333,7 @@ void oled_switchscreens() {
                     display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("ESC:");
                     display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)escparsed->frametemp2/10.0f);
                     display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
+                    */
                   break;
               #endif
               case stopsubscreen_minmax: //Single/Dual/Same
@@ -2342,11 +2347,22 @@ void oled_switchscreens() {
               break;
               case stopsubscreen_batt1: //Single/Dual/Same
                 #if !defined useoled2
-                  display1.printf("BATTERY 1       (%d/%d)",subscreen,stopsubscreens);
+                  //display1.printf("BATTERY 1       (%d/%d)",subscreen,stopsubscreens);
+                  drawscreen_header(FPSTR(headline_battery1),subscreen,stopsubscreens);
                 #else
-                  display1.printf("BATTERY STATUS  (%d/%d)",subscreen,stopsubscreens);
+                  //display1.printf("BATTERY STATUS  (%d/%d)",subscreen,stopsubscreens);
+                  drawscreen_header(FPSTR(headline_batterystatus),subscreen,stopsubscreens);
                 #endif
-                line = dataoffset+baselineoffset;
+                sprintf(val1buf,"%5.2f",(float)bmsparsed->voltage/100.0f);
+                sprintf(val2buf,"%4d%",bmsparsed->remainingpercent);
+                sprintf(val3buf,"%4d",bmsparsed->cycles);
+                sprintf(val4buf,"%4d",bmsparsed->chargingtimes);
+                drawscreen_data(true, 4, true,
+                    FPSTR(label_volt),&val1buf[0],FPSTR(unit_volt),
+                    FPSTR(label_percent),&val2buf[0],FPSTR(unit_percent),
+                    FPSTR(label_cycles),&val3buf[0],FPSTR(unit_count),
+                    FPSTR(label_charges),&val4buf[0],FPSTR(unit_count));
+                /*line = dataoffset+baselineoffset;
                   display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Volt:");
                   display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%5.2f",(float)bmsparsed->voltage/100.0f);
                   display1.setCursor(119,line); display1.setFont(); display1.print("V");
@@ -2362,11 +2378,24 @@ void oled_switchscreens() {
                   display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Charges:");
                   display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->chargingtimes);
                   display1.setCursor(119,line); display1.setFont(); display1.print("#");
+                */
               break;
               #if !defined useoled2  
                 case stopsubscreen_batt2: //Single Screen Batt Info 2: Health/Cycles/Charge Num/Prod Date
-                    display1.printf("BATTERY 2       (%d/%d)",subscreen,stopsubscreens);
-                    line = dataoffset+baselineoffset;
+                    //display1.printf("BATTERY 2       (%d/%d)",subscreen,stopsubscreens);
+                    drawscreen_header(FPSTR(headline_battery2),subscreen,stopsubscreens);
+                    sprintf(val1buf,"%4d",bmsparsed->health);
+                    sprintf(val2buf,"%5d",bmsparsed->remainingcapacity);
+                    sprintf(val3buf,"%5d",bmsparsed->totalcapacity);
+                    sprintf(val4buf,"%02d/%02d",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
+                    drawscreen_data(true, 4, true,
+                        FPSTR(label_health),&val1buf[0],FPSTR(unit_percent),
+                        FPSTR(label_capacityshort),&val2buf[0],FPSTR(unit_mah),
+                        FPSTR(label_totalcapacityshort),&val3buf[0],FPSTR(unit_mah),
+                        FPSTR(label_tempshort),&val4buf[0],FPSTR(unit_temp));
+                    
+
+                    /*line = dataoffset+baselineoffset;
                       display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Health:");
                       display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->health);
                       display1.setCursor(119,line); display1.setFont(); display1.print("%");
@@ -2384,9 +2413,11 @@ void oled_switchscreens() {
                       display1.setCursor(119,line); display1.setFont(); display1.print("C");
                       display1.drawCircle(115,line-5,1,WHITE);
                      break;
+                     */
               #endif
               case stopsubscreen_cells: //single/dual/different
-                display1.printf("CELL VOLTAGES   (%d/%d)\r\n",subscreen,stopsubscreens);
+                //display1.printf("CELL VOLTAGES   (%d/%d)\r\n",subscreen,stopsubscreens);
+                drawscreen_header(FPSTR(headline_cellvolt),subscreen,stopsubscreens);
                 #if !defined useoled2
                   if (conf_battcells>=1) { display1.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
                   if (conf_battcells>=2) { display1.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
@@ -2400,7 +2431,7 @@ void oled_switchscreens() {
                   if (conf_battcells>=10) { display1.printf("10: %5.3f ",(float)bmsparsed->Cell10Voltage/1000.0f); }
                   if (conf_battcells>=11) { display1.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
                   if (conf_battcells>=12) { display1.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
-                  display1.printf("Max. Diff: %5.3f", (float)(highest-lowest)/1000.0f);
+                  display1.printf("%s %5.3f", FPSTR(label_maxdiff), (float)(highest-lowest)/1000.0f);
                 #else
                   display1.setFont(&FreeSans9pt7b); 
                   display1.setCursor(0,21);
@@ -2418,46 +2449,43 @@ void oled_switchscreens() {
                 #endif  
               break;
               case stopsubscreen_assets: //Single/Dual/Same
-                display1.printf("Assets          (%d/%d)\r\n",subscreen,stopsubscreens);
-                //display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset); display1.print("BMS SN:");
+                drawscreen_header(FPSTR(headline_assests),subscreen,stopsubscreens);
                 sprintf(tmp1,"%c%c%c%c%c%c%c%c%c%c%c%c%c%c",bmsparsed->serial[0],bmsparsed->serial[1],bmsparsed->serial[2],bmsparsed->serial[3],bmsparsed->serial[4],bmsparsed->serial[5],bmsparsed->serial[6],bmsparsed->serial[7],bmsparsed->serial[8],bmsparsed->serial[9],bmsparsed->serial[10],bmsparsed->serial[11],bmsparsed->serial[12],bmsparsed->serial[13]);
-                display1.printf("BMS   FW: %x.%x.%x\r\nSN: %s\r\n", bmsparsed->fwversion[1],(bmsparsed->fwversion[0]&0xf0)>>4,bmsparsed->fwversion[0]&0x0f,tmp1);
-                //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset); display1.printf("%s",tmp1);
-                //display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*2+linespace); 
-                //display1.print("BMS FW:   ");
-                //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset*2+linespace); 
-                //display1.printf("%x.%x.%x\r\n",bmsparsed->fwversion[1],(bmsparsed->fwversion[0]&0xf0)>>4,bmsparsed->fwversion[0]&0x0f);
-                //display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*3+linespace*2); 
+                display1.printf(FPSTR(s_bmsfw), bmsparsed->fwversion[1],(bmsparsed->fwversion[0]&0xf0)>>4,bmsparsed->fwversion[0]&0x0f,tmp1);
                 sprintf(tmp1,"%c%c%c%c%c%c%c%c%c%c%c%c%c%c",escparsed->serial[0],escparsed->serial[1],escparsed->serial[2],escparsed->serial[3],escparsed->serial[4],escparsed->serial[5],escparsed->serial[6],escparsed->serial[7],escparsed->serial[8],escparsed->serial[9],escparsed->serial[10],escparsed->serial[11],escparsed->serial[12],escparsed->serial[13]);
-                display1.printf("ESC   FW: %x.%x.%x\r\nSN: %s\r\n", escparsed->fwversion[1],(escparsed->fwversion[0]&0xf0)>>4,escparsed->fwversion[0]&0x0f,tmp1);
-                //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset*3+linespace*2); display1.printf("%s",tmp1);
-                //display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*4+linespace*3); 
-                //display1.print("ESC FW:   ");
-                //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset*4+linespace*3); 
-                //display1.printf("%x.%x.%x\r\n",escparsed->fwversion[1],(escparsed->fwversion[0]&0xf0)>>4,escparsed->fwversion[0]&0x0f);
-                //display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*4+linespace*3); 
+                display1.printf(FPSTR(s_escfw), escparsed->fwversion[1],(escparsed->fwversion[0]&0xf0)>>4,escparsed->fwversion[0]&0x0f,tmp1);
                 sprintf(tmp1,"%c%c%c%c%c%c",escparsed->pin[0],escparsed->pin[1],escparsed->pin[2],escparsed->pin[3],escparsed->pin[4],escparsed->pin[5]);
-                display1.printf("Pin: %s\r\n", tmp1);
-                display1.printf("Miles: %.2f km\r\n",(float)escparsed->totaldistance/1000.0f);
-                display1.printf("Batt-Date: 20%02d-%02d-%02d",((bmsparsed->proddate)&0xFE00)>>9,((bmsparsed->proddate)&0x1E0)>>5,(bmsparsed->proddate)&0x1f);
-                //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,dataoffset+baselineoffset*3+linespace*2); 
-                //display1.printf("%s",tmp1);
+                display1.printf(FPSTR(s_pin), tmp1);
+                display1.printf(FPSTR(s_miles),(float)escparsed->totaldistance/1000.0f);
+                display1.printf(FPSTR(s_battdate),((bmsparsed->proddate)&0xFE00)>>9,((bmsparsed->proddate)&0x1E0)>>5,(bmsparsed->proddate)&0x1f);
               break;
               #if !defined useoled2  
                 case stopsubscreen_espstate: //single
-                    display1.printf("ESP32 State     (%d/%d)\r\n\r\n",subscreen,stopsubscreens);
-                    display1.print("Firmware: "); display1.println(swversion);
-                    display1.print("WLAN: ");
-                    if (wlanstate==wlansearching) { display1.println("searching..."); }
-                    if (wlanstate==wlanconnected) { display1.print("Connected\r\nSSID: "); display1.println(WiFi.SSID()); display1.println(WiFi.localIP()); }
-                    if (wlanstate==wlanap) { display1.print("AP Mode\r\nSSID: "); display1.println(WiFi.softAPIP()); display1.println( WiFi.softAPIP());}
-                    if (wlanstate==wlanoff) { display1.println("OFF"); }
-                    display1.print("BT: OFF");
+                    //display1.printf("ESP32 State     (%d/%d)\r\n\r\n",subscreen,stopsubscreens);
+                    drawscreen_header(FPSTR(headline_espstate),subscreen,stopsubscreens);
+                    display1.print(FPSTR(s_firmware)); display1.println(swversion);
+                    display1.print(FPSTR(s_wlan));
+                    if (wlanstate==wlansearching) { display1.println(FPSTR(s_wlansearch)); }
+                    if (wlanstate==wlanconnected) { display1.print(FPSTR(s_wlancon)); display1.println(WiFi.SSID()); display1.println(WiFi.localIP()); }
+                    if (wlanstate==wlanap) { display1.print(FPSTR(s_wlanap)); display1.println(WiFi.softAPIP()); display1.println( WiFi.softAPIP());}
+                    if (wlanstate==wlanoff) { display1.println(FPSTR(s_off)); }
+                    display1.print(FPSTR(s_bleoff));
                   break;
               #endif
               case stopsubscreen_alarms: //single/dual/same
-               display1.printf("ALARMCOUNTERS   (%d/%d)",subscreen, stopsubscreens);
-              line = dataoffset+baselineoffset;
+               //display1.printf("ALARMCOUNTERS   (%d/%d)",subscreen, stopsubscreens);
+               drawscreen_header(FPSTR(headline_alerts),subscreen,stopsubscreens);
+
+               sprintf(val1buf,"%03d",alertcounter_bmstemp);
+                    sprintf(val2buf,"%03d",alertcounter_esctemp);
+                    sprintf(val3buf,"%03d",alertcounter_cellvoltage);
+                    sprintf(val4buf,"%03d",alertcounter_undervoltage);
+                    drawscreen_data(true, 4, false,
+                        FPSTR(label_bmstemp),&val1buf[0],FPSTR(unit_percent),
+                        FPSTR(label_esctemp),&val2buf[0],FPSTR(unit_mah),
+                        FPSTR(label_cellvoltage),&val3buf[0],FPSTR(unit_mah),
+                        FPSTR(label_undervoltage),&val4buf[0],FPSTR(unit_temp));
+              /*line = dataoffset+baselineoffset;
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("BMS Temp:");
                 display1.setFont(&FreeSansBold9pt7b); display1.setCursor(96,line); display1.printf("%03d",alertcounter_bmstemp);
                 //display1.setCursor(119,line); display1.setFont(); display1.print("V");
@@ -2469,6 +2497,7 @@ void oled_switchscreens() {
                 display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("CellVoltage:");
                 display1.setFont(&FreeSansBold9pt7b); display1.setCursor(96,line); display1.printf("%03d",alertcounter_cellvoltage);
                 //display1.setCursor(119,line); display1.setFont(); display1.print("#");
+              */
               break;
           }
     }
@@ -2487,40 +2516,48 @@ void oled_switchscreens() {
 
         switch(curline) {
             case cms_light:
-                display1.print("Tail Light: ");
+                display1.print(FPSTR(menu_light));
                   switch(escparsed->taillight) {
-                    case 0: display1.print("Off"); break;
-                    case 2: display1.print("On"); break;
+                    case 0: display1.print(FPSTR(menu_off)); break;
+                    case 2: display1.print(FPSTR(menu_on)); break;
                   }
               break;
             case cms_cruise: 
-                display1.print("Cruise Control:");
+                display1.print(FPSTR(menu_cruise));
                   switch(escparsed->cruisemode) {
-                    case 0: display1.print("Off"); break;
-                    case 1: display1.print("On"); break;
+                    case 0: display1.print(FPSTR(menu_off)); break;
+                    case 1: display1.print(FPSTR(menu_on)); break;
                   }
               break;
             case cms_kers: 
-                display1.print("KERS: ");
+                display1.print(FPSTR(menu_kers));
                   switch(escparsed->kers) {
-                    case 0: display1.print("weak"); break;
-                    case 1: display1.print("medium"); break;
-                    case 2: display1.print("strong"); break;
+                    case 0: display1.print(FPSTR(menu_weak)); break;
+                    case 1: display1.print(FPSTR(menu_medium)); break;
+                    case 2: display1.print(FPSTR(menu_strong)); break;
                   }
               break;
-            case cms_ws: display1.print("Wheelsize: ");
+            case cms_ws: display1.print(FPSTR(menu_wheelsize));
                 if (conf_wheelsize==0) { display1.print("8.5\""); }
                 if (conf_wheelsize==1) { display1.print("10\""); }
                 if (conf_wheelsize>1) { display1.print("???"); }
               break;
-            case cms_bc: display1.printf("Battery: %d Cells", conf_battcells);
+            case cms_unit: display1.print(FPSTR(menu_unit));
+                if (conf_unit==0) { display1.print(FPSTR(menu_km)); }
+                if (conf_unit==1) { display1.print(FPSTR(menu_miles)); }
               break;
-            case cms_bac: display1.printf("Battery Alert: %d0mV", conf_alert_batt_celldiff);
+            case cms_bc: display1.print(FPSTR(menu_battcells));
+                      display1.printf("%d", conf_battcells);
+              break;
+            case cms_bac: display1.print(FPSTR(menu_battalertcell));
+                display1.printf("%d0 mV", conf_alert_batt_celldiff);
 
               break;
-            case cms_bat: display1.printf("Batt Temp Alert: %d C", conf_alert_batt_temp);
+            case cms_bat: display1.print(FPSTR(menu_battalerttemp));
+                  display1.printf("%d C", conf_alert_batt_temp);
               break;
-            case cms_eat: display1.printf("ESC Temp Alert: %d C", conf_alert_esc_temp);
+            case cms_eat: display1.print(FPSTR(menu_escalerttemp));
+                    display1.printf("%d C", conf_alert_esc_temp);
               break;
             case cms_flashprotection: display1.print("***");
                 //display1.print("Flashprotection: ");
@@ -2529,21 +2566,21 @@ void oled_switchscreens() {
             case cms_blekomoot: display1.print("***");
                 //display1.print("Start BLE for Komoot");
               break;
-            case cms_busmode: display1.print("ESP Busmode: ");
-                if (conf_espbusmode) { display1.print("Active"); } else { display1.print("Passive"); }
+            case cms_busmode: display1.print(FPSTR(menu_espbusmode));
+                if (conf_espbusmode) { display1.print(FPSTR(menu_active)); } else { display1.print(FPSTR(menu_passive)); }
               break;
-            case cms_wifirestart: display1.print("ESP Restart Wifi");
+            case cms_wifirestart: display1.print(FPSTR(menu_espwifirestart));
               break;
             case cms_changelock: 
                   if (escparsed->lockstate==0x00) {
-                    display1.print("M365 LOCK");
+                    display1.print(FPSTR(menu_m365lock));
                   } else {
-                    display1.print("M365 UNLOCK");
+                    display1.print(FPSTR(menu_m365unlock));
                   }
               break;
-            case cms_turnoff: display1.print("M365 OFF");
+            case cms_turnoff: display1.print(FPSTR(menu_m365turnoff));
               break;
-            case cms_exit: display1.print("Exit");
+            case cms_exit: display1.print(FPSTR(menu_exit));
               break;
           } //switch curline
           lineitem++;
@@ -2609,38 +2646,38 @@ void oled_switchscreens() {
         #if !defined(useoled2)
           display1.setFont(&fontsmall);
           display1.setCursor(30,20);
-          display1.print("ERROR");
+          display1.print(FPSTR(error_error));
           display1.setCursor(50,40);
           display1.printf("%02d",escparsed->error);
           display1.setFont();
           display1.setCursor(0,56);
           switch (escparsed->error) {
-            case 10: display2.print("BLE Communication"); break;
-            case 11: display2.print("Mot Phase A Current"); break;
-            case 12: display2.print("Mot Phase B Current"); break;
-            case 13: display2.print("Mot Phase C Current"); break;
-            case 14: display2.print("THROTTLE SENSOR"); break;
-            case 15: display2.print("BRAKE SENSOR"); break;
-            case 18: display2.print("MOTOR HALL SENSOR"); break;
-            case 21: display2.print("BMS Communication"); break;
-            case 22: display2.print("Bad BMS Password"); break;
-            case 23: display2.print("BMS Serialnumber"); break;
-            case 24: display2.print("VOLTAGE WRONG"); break;
-            case 26: display2.print("EEPROM/FLASH CRC"); break;
-            case 27: display2.print("Bad ESC Password"); break;
-            case 28: display2.print("hS FET Error"); break;
-            case 29: display2.print("lS FET Error"); break;
-            case 31: display2.print("Program Error"); break;
-            case 35: display2.print("ESC Serial"); break;
-            case 36: display2.print("ESC Activation"); break;
-            case 39: display2.print("BATT TEMP ALERT"); break;
-            case 40: display2.print("ESC TEMP ALERT"); break;
-            default: display2.print("unknown code"); break;
+            case 10: display1.print(FPSTR(error_10)); break;
+            case 11: display1.print(FPSTR(error_11)); break;
+            case 12: display1.print(FPSTR(error_12)); break;
+            case 13: display1.print(FPSTR(error_13)); break;
+            case 14: display1.print(FPSTR(error_14)); break;
+            case 15: display1.print(FPSTR(error_15)); break;
+            case 18: display1.print(FPSTR(error_18)); break;
+            case 21: display1.print(FPSTR(error_21)); break;
+            case 22: display1.print(FPSTR(error_22)); break;
+            case 23: display1.print(FPSTR(error_23)); break;
+            case 24: display1.print(FPSTR(error_24)); break;
+            case 26: display1.print(FPSTR(error_26)); break;
+            case 27: display1.print(FPSTR(error_27)); break;
+            case 28: display1.print(FPSTR(error_28)); break;
+            case 29: display1.print(FPSTR(error_29)); break;
+            case 31: display1.print(FPSTR(error_31)); break;
+            case 35: display1.print(FPSTR(error_35)); break;
+            case 36: display1.print(FPSTR(error_36)); break;
+            case 39: display1.print(FPSTR(error_39)); break;
+            case 40: display1.print(FPSTR(error_40)); break;
+            default: display1.print(FPSTR(error_other)); break;
           }
         #else
           display1.setFont(&fontsmall);
           display1.setCursor(50,20);
-          display1.print("ERROR");
+          display1.print(FPSTR(error_error));
           display1.setCursor(70,45);
           display1.printf("%02d",escparsed->error);
           display1.drawBitmap(0,0,  scooter, 64,64, 1);
@@ -2648,63 +2685,27 @@ void oled_switchscreens() {
     }
     if (screen==screen_timeout) {
       #ifdef useoled2
-        oled_startscreen();
+        drawscreen_startscreen();
       #else
         display1.drawBitmap(0,0,  scooter, 64,64, 1);
         display1.setFont(&fontsmall);
         display1.setCursor(74,15);
-        display1.print("NO");
+        display1.print(FPSTR(s_timeout1));
         display1.setCursor(64,35);
-        display1.print("DATA");
+        display1.print(FPSTR(s_timeout2));
         display1.setFont();
-        if (wlanstate==wlansearching) { display1.setCursor(64,42); display1.print("WLAN"); display1.setCursor(64,55); display1.print("searching"); }
+        if (wlanstate==wlansearching) { display1.setCursor(64,42); display1.print(FPSTR(s_wlan)); display1.setCursor(64,55); display1.print(FPSTR(s_wlansearch)); }
         if (wlanstate==wlanconnected) { display1.setCursor(64,42); display1.print(WiFi.SSID()); display1.setCursor(34,57); display1.print(WiFi.localIP()); }
         if (wlanstate==wlanap) { display1.setCursor(64,42); display1.print(WiFi.softAPIP()); display1.setCursor(34,57); display1.print( WiFi.softAPIP()); }
-        if (wlanstate==wlanoff) { display1.setCursor(64,56); display1.print("WLAN OFF"); }
+        if (wlanstate==wlanoff) { display1.setCursor(64,56); display1.print(FPSTR(s_wlanoff)); }
       #endif
     }
-
-    //Status ICONS (text for now) on right edge in drive/stop screen - LIGHT On/Off, Ecomode On/Off
-      if (screen==screen_drive) {
-        //if (screen==screen_drive) {
-        //LIGHT ON/OFF
-          display1.setFont(&FreeSans9pt7b); 
-          if (x1parsed->light==0x64) { 
-            //display1.setFont();
-            display1.setCursor(100,20);
-            display1.print("L");
-          }
-          /*
-        //NORMAL/ECO MODE
-          display1.setCursor(120,20);
-          if (x1parsed->mode<2) { 
-            display1.print("N"); //normal mode
-          } else {
-            display1.print("E"); //eco mode
-          }*/
-        //WLAN STATUS
-          //display1.setFont();
-          display1.setCursor(110,fontsmallheight<<1);
-          if (wlanstate==wlansearching) { display1.print("WS"); }
-          if (wlanstate==wlanconnected) { display1.print("WC"); }
-          if (wlanstate==wlanap) { display1.print("WA"); }
-        //if wlan on
-          //if telnet connected TC
-
-        //Bluetooth Status
-        //  display1.setFont();
-        //  display1.setCursor(116,line4);
-        //  if (blestate==blesearching) { display1.print("BS"); }
-        //  if (blestate==bleconnected) { display1.print("BC"); }
-        display1.setFont();
-      }
       if ((screen==screen_stop)&(subscreen==0)) {
-        //if (screen==screen_drive) {
         //Lockstate
           if (escparsed->lockstate==0x02) { 
             display1.setFont();
             display1.setCursor(88,line1);
-            display1.print("LOCKED");
+            display1.print(FPSTR(s_locked));
           } else {
         
             //LIGHT ON/OFF
@@ -2750,44 +2751,21 @@ void oled_switchscreens() {
     }
     display2.clearDisplay();
     if (screen==screen_drive) {
-        //Watt
-          display2.setCursor(0,fontbigbaselinezero-5);
-          display2.setFont(&fontbig);
-          display2.printf("%04.0f", ((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
-          display2.setFont();
-          display2.setCursor(104,28);
-          display2.print("W");
-        //Ampere
-          display2.setFont(&FreeSans18pt7b);
-          display2.setCursor(0,63);
-          display2.printf("%02.0f",(float)bmsparsed->current/100.0f);
-          display2.setFont();
-          display2.setCursor(40,line8); 
-          display2.print("A");
-        //Volt
-          display2.setFont(&FreeSans18pt7b);
-          display2.setCursor(63,63);
-          display2.printf("%02.0f",(float)bmsparsed->voltage/100.0f);
-          display2.setFont();
-          display2.setCursor(104,line8); 
-          display2.print("V");
-        //Batt Graph 
-          display2.drawRect(117,0,8,4,WHITE);
-          display2.fillRect(115,3,12,61,WHITE);
-          //display2.fillRect(118,1+(uint8_t)((100.0f-(float)bmsparsed->remainingpercent)*0.62f),8,(uint8_t)((float)bmsparsed->remainingpercent*0.62f),WHITE);
-          display2.fillRect(116,5,10,(uint8_t)((100.0f-(float)bmsparsed->remainingpercent)*0.59f),BLACK);
-          display1.drawFastHLine(116,18,10,BLACK);
-          display1.drawFastHLine(116,19,10,BLACK);
-          display1.drawFastHLine(116,32,10,BLACK);
-          display1.drawFastHLine(116,33,10,BLACK);
-          display1.drawFastHLine(116,47,10,BLACK);
-          display1.drawFastHLine(116,48,10,BLACK);
+        display1.setFont(&ARIALNB18pt7b); display1.setCursor(0,31); display1.printf("%03.0f", ((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
+        display1.setFont(&ARIALN9pt7b); display1.setCursor(50,31); display1.print("W");
+        display1.setFont(&ARIALNB18pt7b); display1.setCursor(65,31); display1.printf("%03d%%",bmsparsed->remainingpercent);
+        display1.setFont(&ARIALN9pt7b); display1.setCursor(116,31); display1.print("%");
+        display1.setFont(&ARIALNB18pt7b); display1.setCursor(0,63); display1.printf("%02.1f",(float)bmsparsed->voltage/100.0f);
+        display1.setFont(&ARIALN9pt7b); display1.setCursor(50,63); display1.print("V");
+        display1.setFont(&ARIALNB18pt7b); display1.setCursor(65,63); display1.printf("%02.1f",(float)bmsparsed->current/100.0f);
+        display1.setFont(&ARIALN9pt7b); display1.setCursor(116,63); display1.print("A");
     }
     if (screen==screen_stop) {
           display2.setFont();
           display2.setCursor(0,0);
           switch (subscreen) {
             case stopsubscreen_trip: //Temperatures - we have 2 Battery Temperatures, but we only display the higher one - both can be seen on detail screens
+            //TODO
                 display2.setFont(&FreeSans9pt7b); display2.setCursor(0,baselineoffset); display2.print("Batt:");
                 display2.setFont(&FreeSansBold9pt7b); display2.setCursor(60,baselineoffset); 
                 if ((float)bmsparsed->temperature[0]>=(float)bmsparsed->temperature[1]) {
@@ -2826,23 +2804,15 @@ void oled_switchscreens() {
                 */
               break;
             case stopsubscreen_batt1:
-                  line = baselineoffset;
-                    display2.setFont(&FreeSans9pt7b); display2.setCursor(0,line); display2.print("Health:");
-                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(64,line); display2.printf("%4d",bmsparsed->health);
-                    display2.setCursor(119,line); display2.setFont(); display2.print("%");
-                  line = baselineoffset*2+linespace;
-                    display2.setFont(&FreeSans9pt7b); display2.setCursor(0,line); display2.print("Cap:");
-                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(56,line); display2.printf("%5d",bmsparsed->remainingcapacity);
-                    display2.setCursor(108,line); display2.setFont(); display2.print("mAh");
-                  line = baselineoffset*3+linespace*2;
-                    display2.setFont(&FreeSans9pt7b); display2.setCursor(0,line); display2.print("Total:");
-                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(56,line); display2.printf("%5d",bmsparsed->totalcapacity);
-                    display2.setCursor(108,line); display2.setFont(); display2.print("mAh");
-                  line = baselineoffset*4+linespace*3;
-                    display2.setFont(&FreeSans9pt7b); display2.setCursor(0,line); display2.print("Temp:");
-                    display2.setFont(&FreeSansBold9pt7b); display2.setCursor(64,line); display2.printf("%02d/%02d",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
-                    display2.setCursor(119,line); display2.setFont(); display2.print("C");
-                    display2.drawCircle(115,line-5,1,WHITE);
+                sprintf(val1buf,"%4d",bmsparsed->health);
+                sprintf(val2buf,"%5d",bmsparsed->remainingcapacity);
+                sprintf(val3buf,"%5d",bmsparsed->totalcapacity);
+                sprintf(val4buf,"%02d/%02d",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
+                drawscreen_data(true, 4, true,
+                    FPSTR(label_health),&val1buf[0],FPSTR(unit_percent),
+                    FPSTR(label_capacityshort),&val2buf[0],FPSTR(unit_mah),
+                    FPSTR(label_totalcapacityshort),&val3buf[0],FPSTR(unit_mah),
+                    FPSTR(label_tempshort),&val4buf[0],FPSTR(unit_temp));
               break;
             case stopsubscreen_cells:
                 display2.setFont(&FreeSans9pt7b); 
@@ -2858,16 +2828,19 @@ void oled_switchscreens() {
                 display2.printf("T:%5.2f D:%5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
               break;
             case stopsubscreen_assets:
-                display2.print("ESP32 Status\r\nFirmware: "); display2.println(swversion);
-                display2.print("WLAN: ");
-                if (wlanstate==wlansearching) { display2.println("searching..."); }
-                if (wlanstate==wlanconnected) { display2.print("Connected\r\nSSID: "); display2.println(WiFi.SSID()); display2.println(WiFi.localIP()); }
-                if (wlanstate==wlanap) { display2.print("AP Mode\r\nSSID: "); display2.println(WiFi.softAPIP()); display2.println( WiFi.softAPIP()); }
-                if (wlanstate==wlanoff) { display2.println("OFF"); }
-                display2.print("BT: OFF");  
+                display2.print(FPSTR(headline_espstate));
+                display2.print(FPSTR(s_firmware)); 
+                display2.println(swversion);
+                display2.print(FPSTR(s_wlan));
+                if (wlanstate==wlansearching) { display2.println(FPSTR(s_wlansearch)); }
+                if (wlanstate==wlanconnected) { display2.print(FPSTR(s_wlancon)); display2.println(WiFi.SSID()); display2.println(WiFi.localIP()); }
+                if (wlanstate==wlanap) { display2.print(FPSTR(s_wlanap)); display2.println(WiFi.softAPIP()); display2.println( WiFi.softAPIP()); }
+                if (wlanstate==wlanoff) { display2.println(FPSTR(s_off)); }
+                display2.print(FPSTR(s_bleoff));  
               break;
             case stopsubscreen_alarms:
-                display2.printf("ALARMCOUNTERS   (%d/%d)\r\n",subscreen,stopsubscreens);
+                //display2.printf("ALARMCOUNTERS   (%d/%d)\r\n",subscreen,stopsubscreens);
+                drawscreen_header(FPSTR(headline_alerts),subscreen,stopsubscreens);
               break;
             default:
                 display2.setFont();
@@ -2913,40 +2886,40 @@ void oled_switchscreens() {
       display2.setFont(&fontsmall);
       display2.setCursor(0,20);
       switch (escparsed->error) {
-        case 10: display2.print("BLE Communication"); break;
-        case 11: display2.print("Mot Phase A Current"); break;
-        case 12: display2.print("Mot Phase B Current"); break;
-        case 13: display2.print("Mot Phase C Current"); break;
-        case 14: display2.print("THROTTLE SENSOR"); break;
-        case 15: display2.print("BRAKE SENSOR"); break;
-        case 18: display2.print("MOTOR HALL SENSOR"); break;
-        case 21: display2.print("BMS Communication"); break;
-        case 22: display2.print("Bad BMS Password"); break;
-        case 23: display2.print("BMS Serialnumber"); break;
-        case 24: display2.print("VOLTAGE WRONG"); break;
-        case 26: display2.print("EEPROM/FLASH CRC"); break;
-        case 27: display2.print("Bad ESC Password"); break;
-        case 28: display2.print("hS FET Error"); break;
-        case 29: display2.print("lS FET Error"); break;
-        case 31: display2.print("Program Error"); break;
-        case 35: display2.print("ESC Serial"); break;
-        case 36: display2.print("ESC Activation"); break;
-        case 39: display2.print("BATT TEMP ALERT"); break;
-        case 40: display2.print("ESC TEMP ALERT"); break;
-        default: display2.print("unknown code^"); break;
+            case 10: display2.print(FPSTR(error_10)); break;
+            case 11: display2.print(FPSTR(error_11)); break;
+            case 12: display2.print(FPSTR(error_12)); break;
+            case 13: display2.print(FPSTR(error_13)); break;
+            case 14: display2.print(FPSTR(error_14)); break;
+            case 15: display2.print(FPSTR(error_15)); break;
+            case 18: display2.print(FPSTR(error_18)); break;
+            case 21: display2.print(FPSTR(error_21)); break;
+            case 22: display2.print(FPSTR(error_22)); break;
+            case 23: display2.print(FPSTR(error_23)); break;
+            case 24: display2.print(FPSTR(error_24)); break;
+            case 26: display2.print(FPSTR(error_26)); break;
+            case 27: display2.print(FPSTR(error_27)); break;
+            case 28: display2.print(FPSTR(error_28)); break;
+            case 29: display2.print(FPSTR(error_29)); break;
+            case 31: display2.print(FPSTR(error_31)); break;
+            case 35: display2.print(FPSTR(error_35)); break;
+            case 36: display2.print(FPSTR(error_36)); break;
+            case 39: display2.print(FPSTR(error_39)); break;
+            case 40: display2.print(FPSTR(error_40)); break;
+            default: display2.print(FPSTR(error_other)); break;
       }
     }
     if (screen==screen_timeout) {  
       display2.setFont(&fontsmall);
       display2.setCursor(40,20);
-      display2.print("DATA");
+      display2.print(FPSTR(s_timeout2));
       display2.setCursor(20,40);
-      display2.print("TIMEOUT");
+      display2.print(FPSTR(s_timeout3));
       display2.setFont();
-      if (wlanstate==wlansearching) { display2.setCursor(0,48); display2.print("WLAN searching..."); }
+      if (wlanstate==wlansearching) { display2.setCursor(0,48); display2.print(FPSTR(s_wlan)); display2.print(FPSTR(s_wlansearch)); }
       if (wlanstate==wlanconnected) { display2.setCursor(0,48); display2.print("SSID: "); display2.print(WiFi.SSID()); display2.setCursor(0,57); display2.print("IP: "); display2.print(WiFi.localIP()); }
       if (wlanstate==wlanap) { display2.setCursor(0,48); display2.print("SSID: ");  display2.print(apssid); display2.setCursor(0,57); display2.print("IP: "); display2.print( WiFi.softAPIP()); }
-      if (wlanstate==wlanoff) { display2.setCursor(40,57); display2.print("WLAN OFF"); }
+      if (wlanstate==wlanoff) { display2.setCursor(40,57); display2.print(FPSTR(s_wlanoff)); }
 
     }
 
@@ -3026,13 +2999,13 @@ void setup() {
   start_m365();
 #ifdef useoled1
   oled1init();
-  oled_startscreen();
+  drawscreen_startscreen();
   display1.display();
 #endif
 #ifdef useoled2
   oled2init();
   display1.setRotation(0);
-  oled_startscreen();
+  drawscreen_startscreen();
   display1.setRotation(OLED1_ROTATION); //upside down
   display2.display();
 #endif
@@ -3095,7 +3068,7 @@ void setup() {
     #endif
     #ifdef useoled2
         display1.clearDisplay();
-        oled_startscreen();
+        drawscreen_startscreen();
         display1.display();
         display2.clearDisplay();
         display2.display();
