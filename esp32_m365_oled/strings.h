@@ -8,8 +8,10 @@ static const char headline_cellvolt[] PROGMEM = "CELL VOLTAGES";
 static const char headline_assests[] PROGMEM = "Assets";
 static const char headline_espstate[] PROGMEM = "ESP State";
 static const char headline_alerts[] PROGMEM = "ALARM COUNTERS";
+static const char headline_charging[] PROGMEM = "CHARGING";
 
-static const char unit_speed[] PROGMEM = "km/h";
+
+static const char unit_speed[] PROGMEM = "kmh";
 static const char unit_distance[] PROGMEM = "km";
 static const char unit_time[] PROGMEM = "s";
 static const char unit_volt[] PROGMEM = "V";
@@ -39,10 +41,10 @@ static const char label_health[] PROGMEM = "Health:";
 static const char label_capacityshort[] PROGMEM = "Cap:";
 static const char label_totalcapacityshort[] PROGMEM = "Total:";
 static const char label_maxdiff[] PROGMEM = "Max. Diff:"; //Cell Voltage Screen, max Difference between cells
-static const char label_bmstemp[] PROGMEM = "BMS Temp:"; //alert screen
-static const char label_esctemp[] PROGMEM = "ESC Temp:"; //alert screen
-static const char label_cellvoltage[] PROGMEM = "CellVoltDiff:"; //alert screen
-static const char label_undervoltage[] PROGMEM = "UnderVoltage"; //alert screen
+static const char label_bmstemp[] PROGMEM = "BMS Tmp:"; //alert screen
+static const char label_esctemp[] PROGMEM = "ESC Tmp:"; //alert screen
+static const char label_cellvoltage[] PROGMEM = "Cell Diff:"; //alert screen
+static const char label_undervoltage[] PROGMEM = "Low Voltage"; //alert screen
 
 static const char menu_light[] PROGMEM = "Tail Light: ";
 static const char menu_cruise[] PROGMEM = "Cruise Control: ";
@@ -99,6 +101,12 @@ static const char s_wlanoff[] PROGMEM = "WLAN OFF";
 static const char s_wlansearch[] PROGMEM = "searching...";
 static const char s_wlancon[] PROGMEM = "Connected\r\nSSID: ";
 static const char s_wlanap[] PROGMEM = "AP Mode\r\nSSID: ";
+static const char s_wlansearchshort[] PROGMEM = "WS";
+static const char s_wlanconshort[] PROGMEM = "WC";
+static const char s_wlanapshort[] PROGMEM = "WA";
+
+
+
 static const char s_off[] PROGMEM = "OFF";
 static const char s_bleoff[] PROGMEM = "BT: OFF";
 static const char s_bmsfw[] PROGMEM = "BMS   FW: %x.%x.%x\r\nSN: %s\r\n";
@@ -110,3 +118,6 @@ static const char s_locked[] PROGMEM = "LOCKED";
 static const char s_timeout1[] PROGMEM = "NO";
 static const char s_timeout2[] PROGMEM = "DATA";
 static const char s_timeout3[] PROGMEM = "TIMEOUT";
+static const char s_blank[] PROGMEM = " ";
+static const char s_charging[] PROGMEM = "Charging";
+static const char s_charged[] PROGMEM = "charged";

@@ -2,6 +2,7 @@
 //Clean readme.md
 //commit/push
 
+
 //add option for miles / kilometers -> simply add it to wheelsize/factor stuff
 //todo: add conf_unit handling to applyconfig
 //add option in menu for beeping on alert
@@ -49,6 +50,7 @@
 
 #if (defined usei2c && defined useoled1)
     Adafruit_SSD1306 display1(oled_reset);
+    Adafruit_SSD1306* displaydraw;
 #endif
 #if (defined usei2c && defined useoled2)
     Adafruit_SSD1306 display2(oled_reset);
@@ -58,6 +60,7 @@
     //software spi Adafruit_SSD1306 display1(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS);
     //hardware spi with patched Adafruit_SSD1306 Library:
     Adafruit_SSD1306 display1(OLED_MISO, OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED1_CS, 4000000UL);
+    Adafruit_SSD1306* displaydraw;
 #endif
 #if (!defined usei2c && defined useoled2)
     //software spi Adafruit_SSD1306 display2(OLED_MOSI, OLED_CLK, OLED_DC, OLED1_RESET, OLED2_CS);
@@ -119,10 +122,10 @@
 //move to screen.h START
   #define sp_lx 0
   #define sp_fontlabel &ARIALN9pt7b
-  #define sp_dx 64
+  #define sp_dx 72 //64 for 4 ltter units, 72 for 3 letter units
   #define sp_dxnu 80
   #define sp_fontdata &ARIALNB9pt7b
-  #define sp_ux 104
+  #define sp_ux 110 //104 for 4 letters, 112 for 3
   #define sp_fontunit
 
   #define menu_x 1
@@ -1915,15 +1918,15 @@ void drawscreen_startscreen() {
 }
 
 void drawscreen_header(const char *h, uint8_t scrnum, uint8_t scrtotal) {
-  display1.setFont();
-  display1.setCursor(0,0);
+  //blestruct* bleparsed = (blestruct*)bledata;
+  displaydraw->setFont();
+  displaydraw->setCursor(0,0);
   if (scrtotal!=0) {
-    display1.printf("%15.15s (%d/%d)\r\n",FPSTR(h),scrnum,scrtotal);
+    displaydraw->printf("%-15.15s (%d/%d)\r\n",FPSTR(h),scrnum,scrtotal);
   } else {
-    display1.printf("%21.21s\r\n",FPSTR(h));
+    displaydraw->printf("%-21.21s\r\n",FPSTR(h));
   }
 }
-
 
 void drawscreen_data(bool headline, uint8_t lines, bool showunits,
                const char *l1, char *v1, const char *u1,
@@ -1939,12 +1942,12 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
             if (!headline & lines==4) { line = baselineoffset; }
             if (headline & lines==3) { line = dataoffset+baselineoffset+5;}
             if (!headline & lines==3) { line = baselineoffset; }
-            display1.setFont(sp_fontlabel); display1.setCursor(sp_lx,line); display1.print(FPSTR(l1));
+            displaydraw->setFont(sp_fontlabel); displaydraw->setCursor(sp_lx,line); displaydraw->print(FPSTR(l1));
             if (showunits) {
-              display1.setFont(sp_fontdata); display1.setCursor(sp_dx,line); display1.printf(v1);
-              display1.setCursor(sp_ux,line); display1.setFont(sp_fontunit); display1.print(FPSTR(u1));
+              displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dx,line); displaydraw->printf(v1);
+              displaydraw->setCursor(sp_ux,line); displaydraw->setFont(sp_fontunit); displaydraw->print(FPSTR(u1));
             } else {
-              display1.setFont(sp_fontdata); display1.setCursor(sp_dxnu,line); display1.printf(v1);
+              displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dxnu,line); displaydraw->printf(v1);
             }
           break;
         case 1:
@@ -1952,12 +1955,12 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
             if (!headline & lines==4) { line = baselineoffset*2+linespace+2;}
             if (headline & lines==3) { line = dataoffset+baselineoffset*2+10; }
             if (!headline & lines==3) { line = baselineoffset*2+5+4; }
-            display1.setFont(sp_fontlabel); display1.setCursor(sp_lx,line); display1.print(FPSTR(l2));
+            displaydraw->setFont(sp_fontlabel); displaydraw->setCursor(sp_lx,line); displaydraw->print(FPSTR(l2));
             if (showunits) {
-              display1.setFont(sp_fontdata); display1.setCursor(sp_dx,line); display1.printf(v2);
-              display1.setCursor(sp_ux,line); display1.setFont(sp_fontunit); display1.print(FPSTR(u2));
+              displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dx,line); displaydraw->printf(v2);
+              displaydraw->setCursor(sp_ux,line); displaydraw->setFont(sp_fontunit); displaydraw->print(FPSTR(u2));
             } else {
-              display1.setFont(sp_fontdata); display1.setCursor(sp_dxnu,line); display1.printf(v2);
+              displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dxnu,line); displaydraw->printf(v2);
             }
           break;
         case 2:
@@ -1965,59 +1968,29 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
             if (!headline & lines==4) { line = baselineoffset*3+linespace*2+5;}
             if (headline & lines==3) { line = dataoffset+baselineoffset*3+15; }
             if (!headline & lines==3) { line = baselineoffset*3+10+8; }
-            display1.setFont(sp_fontlabel); display1.setCursor(sp_lx,line); display1.print(FPSTR(l3));
+            displaydraw->setFont(sp_fontlabel); displaydraw->setCursor(sp_lx,line); displaydraw->print(FPSTR(l3));
             if (showunits) {
-              display1.setFont(sp_fontdata); display1.setCursor(sp_dx,line); display1.printf(v3);
-              display1.setCursor(sp_ux,line); display1.setFont(sp_fontunit); display1.print(FPSTR(u3));
+              displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dx,line); displaydraw->printf(v3);
+              displaydraw->setCursor(sp_ux,line); displaydraw->setFont(sp_fontunit); displaydraw->print(FPSTR(u3));
             } else {
-              display1.setFont(sp_fontdata); display1.setCursor(sp_dxnu,line); display1.printf(v3);
+              displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dxnu,line); displaydraw->printf(v3);
             }
           break;
         case 3:
             if (headline & lines==4) { line = dataoffset+baselineoffset*4+linespace*3; }
             if (!headline & lines==4) { line = baselineoffset*4+linespace*3+8;}
-            display1.setFont(sp_fontlabel); display1.setCursor(sp_lx,line); display1.print(FPSTR(l4));
+            displaydraw->setFont(sp_fontlabel); displaydraw->setCursor(sp_lx,line); displaydraw->print(FPSTR(l4));
             if (showunits) {
-              display1.setFont(sp_fontdata); display1.setCursor(sp_dx,line); display1.printf(v4);
-              display1.setCursor(sp_ux,line); display1.setFont(sp_fontunit); display1.print(FPSTR(u4));
+              displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dx,line); displaydraw->printf(v4);
+              displaydraw->setCursor(sp_ux,line); displaydraw->setFont(sp_fontunit); displaydraw->print(FPSTR(u4));
             } else {
-              display1.setFont(sp_fontdata); display1.setCursor(sp_dxnu,line); display1.printf(v4);
+              displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dxnu,line); displaydraw->printf(v4);
             }
           break;
       } //Switch i
   } //for i
 } //drawscreen
 
-void drawscreen1_drive() {
-  display1.clearDisplay();
-  display1.setFont(&ariblk42pt7b);
-  display1.setCursor(0,62);
-  display1.print("33");
-  display1.setFont(&ARIALNB18pt7b);
-  display1.setCursor(108,28);
-  display1.print("3");
-  display1.setFont(&ARIALNB9pt7b);
-  display1.setCursor(118,45);
-  display1.print("L");
-  display1.setCursor(118,63);
-  display1.print("N");
-  display1.display();
-}
-
-void drawscreen2_drive() {
-  display2.clearDisplay();
-  //display2.drawFastHLine(0,31,128,WHITE);
-  //display2.drawFastVLine(64,0,64,WHITE);
-  display2.setFont(&ARIALNB18pt7b); display2.setCursor(0,31); display2.printf("%03d", 888);
-  display2.setFont(&ARIALN9pt7b); display2.setCursor(50,31); display2.print("W");
-  display2.setFont(&ARIALNB18pt7b); display2.setCursor(65,31); display2.printf("%03d",100);
-  display2.setFont(&ARIALN9pt7b); display2.setCursor(116,31); display2.print("%");
-  display2.setFont(&ARIALNB18pt7b); display2.setCursor(0,63); display2.printf("%03d", 38);
-  display2.setFont(&ARIALN9pt7b); display2.setCursor(50,63); display2.print("V");
-  display2.setFont(&ARIALNB18pt7b); display2.setCursor(65,63); display2.printf("%03d",15);
-  display2.setFont(&ARIALN9pt7b); display2.setCursor(116,63); display2.print("A");
-  display2.display();
-}
 
 void drawscreen_screenconfigsingle() {
   uint8_t line = baselineoffset;
@@ -2249,21 +2222,23 @@ void oled_switchscreens() {
       #endif
     }
     display1.clearDisplay();
+    displaydraw = &display1;
     
     if (screen==screen_drive) {
         display1.setFont(&ariblk42pt7b);
         display1.setCursor(0,62);
-        display1.printf("%02f", abs((float)escparsed->speed/1000.0f*wheelfact));
+        display1.printf("%02d", uint8_t(abs((float)escparsed->speed/1000.0f*wheelfact)));
         display1.setFont(&ARIALNB18pt7b);
         display1.setCursor(108,28);
-        display1.printf("%01d", uint16_t((float)escparsed->speed/100.0f*wheelfact) %10);       display1.setFont(&ARIALNB9pt7b);
+        display1.printf("%01d", uint16_t((float)escparsed->speed/100.0f*wheelfact) %10); 
+        display1.setFont(&ARIALNB9pt7b);
         if (x1parsed->light==0x64) { 
           display1.setCursor(118,45);
           display1.print("L");
         }
         display1.setCursor(118,63);
         if (x1parsed->mode<2) { 
-          display1.print("N"); //normal mode
+          //display1.print("N"); //normal mode
         } else {
           display1.print("E"); //eco mode
         }
@@ -2271,9 +2246,7 @@ void oled_switchscreens() {
     if (screen==screen_stop) {
           display1.setFont();
           display1.setCursor(0,0);
-          //display1.drawFastHLine(0,8,windowsubpos,WHITE);
           switch (subscreen) {
-
             case stopsubscreen_trip: //Trip Info: Average Speed, Distance, Time, Average Speed 
                 drawscreen_header(FPSTR(headline_tripinfo),0,0);
                 sprintf(val1buf,"%05.2f",(float)escparsed->averagespeed/1000.0f*wheelfact);
@@ -2285,30 +2258,9 @@ void oled_switchscreens() {
                       FPSTR(label_distanceshort),&val2buf[0],FPSTR(unit_distance),
                       FPSTR(label_time),&val3buf[0],FPSTR(label_seconds),
                       FPSTR(label_remainingshort),&val4buf[0],FPSTR(unit_distance));
-
-
-                /*
-                display1.print("TRIP Info");
-
-                //display1.drawFastHLine(0,8,128,WHITE);
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset); display1.print("Avg:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset); display1.printf("%05.2f",(float)escparsed->averagespeed/1000.0f*wheelfact);
-                display1.setCursor(100,dataoffset+baselineoffset); display1.setFont(); display1.print("km/h");
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*2+linespace); display1.print("Dist:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset*2+linespace); display1.printf("%05.2f",(float)escparsed->tripdistance/100.0f*wheelfact);
-                display1.setCursor(100,dataoffset+baselineoffset*2+linespace); display1.setFont(); display1.print("km");
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*3+linespace*2); display1.print("Time:");
-                //display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset*3+linespace*2); display1.printf("%05d",escparsed->triptime);
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset*3+linespace*2); display1.printf("%02d:%02d",escparsed->triptime/60,escparsed->triptime % 60);
-                display1.setCursor(100,dataoffset+baselineoffset*3+linespace*2); display1.setFont(); display1.print("s");
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,dataoffset+baselineoffset*4+linespace*3); display1.print("Rem:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(50,dataoffset+baselineoffset*4+linespace*3); display1.printf("%05.2f",(float)escparsed->remainingdistance/100.0f);
-                display1.setCursor(100,dataoffset+baselineoffset*4+linespace*3); display1.setFont(); display1.print("km");
-                */
               break;
               #if !defined useoled2
                 case stopsubscreen_temp: //Single
-                    //display1.printf("TEMPERATURE     (%d/%d)",subscreen,stopsubscreens);
                     drawscreen_header(FPSTR(headline_temperature),subscreen,stopsubscreens);
                     sprintf(val1buf,"%4.1f",(float)bmsparsed->temperature[0]-20.0f);
                     sprintf(val2buf,"%4.1f",(float)bmsparsed->temperature[1]-20.0f);
@@ -2318,25 +2270,10 @@ void oled_switchscreens() {
                       FPSTR(label_batt2),&val2buf[0],FPSTR(unit_temp),
                       FPSTR(label_esc),&val3buf[0],FPSTR(unit_temp),
                       NULL,NULL,NULL);
-
-
-                  /*
-                  line = dataoffset+baselineoffset;
-                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Batt1:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)bmsparsed->temperature[0]-20.0f);  
-                    display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
-                  line = dataoffset+baselineoffset*2+linespace;
-                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Batt2:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)bmsparsed->temperature[1]-20.0f);  
-                    display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
-                  line = dataoffset+baselineoffset*3+linespace*2;
-                    display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("ESC:");
-                    display1.setFont(&FreeSansBold9pt7b); display1.setCursor(60,line); display1.printf("%4.1f",(float)escparsed->frametemp2/10.0f);
-                    display1.setCursor(100,line); display1.setFont(); display1.print(" C"); display1.drawCircle(103,line-5,1,WHITE);
-                    */
                   break;
               #endif
               case stopsubscreen_minmax: //Single/Dual/Same
+              //fix this screen - single and dual version...
                 display1.printf("TRIP Min/Max    (%d/%d)\r\n\r\n",subscreen,stopsubscreens);
                 display1.printf("Speed : %5.1f %5.1f\r\n",(float)speed_min/1000.0f,(float)speed_max/1000.0f);
                 display1.printf("Ampere: %5.1f %5.1f A\r\n",(float)current_min/100.0f,(float)current_max/100.0f);
@@ -2347,10 +2284,8 @@ void oled_switchscreens() {
               break;
               case stopsubscreen_batt1: //Single/Dual/Same
                 #if !defined useoled2
-                  //display1.printf("BATTERY 1       (%d/%d)",subscreen,stopsubscreens);
                   drawscreen_header(FPSTR(headline_battery1),subscreen,stopsubscreens);
                 #else
-                  //display1.printf("BATTERY STATUS  (%d/%d)",subscreen,stopsubscreens);
                   drawscreen_header(FPSTR(headline_batterystatus),subscreen,stopsubscreens);
                 #endif
                 sprintf(val1buf,"%5.2f",(float)bmsparsed->voltage/100.0f);
@@ -2362,27 +2297,9 @@ void oled_switchscreens() {
                     FPSTR(label_percent),&val2buf[0],FPSTR(unit_percent),
                     FPSTR(label_cycles),&val3buf[0],FPSTR(unit_count),
                     FPSTR(label_charges),&val4buf[0],FPSTR(unit_count));
-                /*line = dataoffset+baselineoffset;
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Volt:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%5.2f",(float)bmsparsed->voltage/100.0f);
-                  display1.setCursor(119,line); display1.setFont(); display1.print("V");
-                line = dataoffset+baselineoffset*2+linespace;
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Percent:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d%",bmsparsed->remainingpercent);
-                  display1.setCursor(119,line); display1.setFont(); display1.print("%");
-                line = dataoffset+baselineoffset*3+linespace*2;
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Cycles:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->cycles);
-                  display1.setCursor(119,line); display1.setFont(); display1.print("#");
-                line = dataoffset+baselineoffset*4+linespace*3;
-                  display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Charges:");
-                  display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->chargingtimes);
-                  display1.setCursor(119,line); display1.setFont(); display1.print("#");
-                */
               break;
               #if !defined useoled2  
                 case stopsubscreen_batt2: //Single Screen Batt Info 2: Health/Cycles/Charge Num/Prod Date
-                    //display1.printf("BATTERY 2       (%d/%d)",subscreen,stopsubscreens);
                     drawscreen_header(FPSTR(headline_battery2),subscreen,stopsubscreens);
                     sprintf(val1buf,"%4d",bmsparsed->health);
                     sprintf(val2buf,"%5d",bmsparsed->remainingcapacity);
@@ -2393,59 +2310,37 @@ void oled_switchscreens() {
                         FPSTR(label_capacityshort),&val2buf[0],FPSTR(unit_mah),
                         FPSTR(label_totalcapacityshort),&val3buf[0],FPSTR(unit_mah),
                         FPSTR(label_tempshort),&val4buf[0],FPSTR(unit_temp));
-                    
-
-                    /*line = dataoffset+baselineoffset;
-                      display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Health:");
-                      display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%4d",bmsparsed->health);
-                      display1.setCursor(119,line); display1.setFont(); display1.print("%");
-                    line = dataoffset+baselineoffset*2+linespace;
-                      display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Cap:");
-                      display1.setFont(&FreeSansBold9pt7b); display1.setCursor(56,line); display1.printf("%5d",bmsparsed->remainingcapacity);
-                      display1.setCursor(108,line); display1.setFont(); display1.print("mAh");
-                    line = dataoffset+baselineoffset*3+linespace*2;
-                      display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Total:");
-                      display1.setFont(&FreeSansBold9pt7b); display1.setCursor(56,line); display1.printf("%5d",bmsparsed->totalcapacity);
-                      display1.setCursor(108,line); display1.setFont(); display1.print("mAh");
-                    line = dataoffset+baselineoffset*4+linespace*3;
-                      display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("Temp:");
-                      display1.setFont(&FreeSansBold9pt7b); display1.setCursor(64,line); display1.printf("%02d/%02d",bmsparsed->temperature[0]-20,bmsparsed->temperature[1]-20);
-                      display1.setCursor(119,line); display1.setFont(); display1.print("C");
-                      display1.drawCircle(115,line-5,1,WHITE);
-                     break;
-                     */
               #endif
               case stopsubscreen_cells: //single/dual/different
-                //display1.printf("CELL VOLTAGES   (%d/%d)\r\n",subscreen,stopsubscreens);
                 drawscreen_header(FPSTR(headline_cellvolt),subscreen,stopsubscreens);
                 #if !defined useoled2
-                  if (conf_battcells>=1) { display1.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
-                  if (conf_battcells>=2) { display1.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
-                  if (conf_battcells>=3) { display1.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
-                  if (conf_battcells>=4) { display1.printf("04: %5.3f  ",(float)bmsparsed->Cell4Voltage/1000.0f); }
-                  if (conf_battcells>=5) { display1.printf("05: %5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
-                  if (conf_battcells>=6) { display1.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
-                  if (conf_battcells>=7) { display1.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
-                  if (conf_battcells>=8) { display1.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
-                  if (conf_battcells>=9) { display1.printf("09: %5.3f  ",(float)bmsparsed->Cell9Voltage/1000.0f); }
-                  if (conf_battcells>=10) { display1.printf("10: %5.3f ",(float)bmsparsed->Cell10Voltage/1000.0f); }
-                  if (conf_battcells>=11) { display1.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
-                  if (conf_battcells>=12) { display1.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
-                  display1.printf("%s %5.3f", FPSTR(label_maxdiff), (float)(highest-lowest)/1000.0f);
+                  if (conf_battcells>=1) { display1.printf("01: %5.03f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
+                  if (conf_battcells>=2) { display1.printf("02: %5.03f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
+                  if (conf_battcells>=3) { display1.printf("03: %5.03f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
+                  if (conf_battcells>=4) { display1.printf("04: %5.03f  ",(float)bmsparsed->Cell4Voltage/1000.0f); }
+                  if (conf_battcells>=5) { display1.printf("05: %5.03f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
+                  if (conf_battcells>=6) { display1.printf("06: %5.03f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
+                  if (conf_battcells>=7) { display1.printf("07: %5.03f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
+                  if (conf_battcells>=8) { display1.printf("08: %5.03f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
+                  if (conf_battcells>=9) { display1.printf("09: %5.03f  ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                  if (conf_battcells>=10) { display1.printf("10: %5.03f ",(float)bmsparsed->Cell10Voltage/1000.0f); }
+                  if (conf_battcells>=11) { display1.printf("11: %5.03f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
+                  if (conf_battcells>=12) { display1.printf("12: %5.03f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
+                  display1.printf("%s %5.03f", FPSTR(label_maxdiff), (float)(highest-lowest)/1000.0f);
                 #else
                   display1.setFont(&FreeSans9pt7b); 
                   display1.setCursor(0,21);
-                  if (conf_battcells>=1) { display1.printf("1:%5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
-                  if (conf_battcells>=2) { display1.printf("2:%5.3f",(float)bmsparsed->Cell2Voltage/1000.0f); }
+                  if (conf_battcells>=1) { display1.printf("1:%5.03f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
+                  if (conf_battcells>=2) { display1.printf("2:%5.03f",(float)bmsparsed->Cell2Voltage/1000.0f); }
                   display1.setCursor(0,35);
-                  if (conf_battcells>=3) { display1.printf("3:%5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
-                  if (conf_battcells>=4) { display1.printf("4:%5.3f",(float)bmsparsed->Cell4Voltage/1000.0f); }
+                  if (conf_battcells>=3) { display1.printf("3:%5.03f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
+                  if (conf_battcells>=4) { display1.printf("4:%5.03f",(float)bmsparsed->Cell4Voltage/1000.0f); }
                   display1.setCursor(0,49);
-                  if (conf_battcells>=5) { display1.printf("5:%5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
-                  if (conf_battcells>=6) { display1.printf("6:%5.3f",(float)bmsparsed->Cell6Voltage/1000.0f); }
+                  if (conf_battcells>=5) { display1.printf("5:%5.03f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
+                  if (conf_battcells>=6) { display1.printf("6:%5.03f",(float)bmsparsed->Cell6Voltage/1000.0f); }
                   display1.setCursor(0,63);
-                  if (conf_battcells>=7) { display1.printf("7:%5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
-                  if (conf_battcells>=8) { display1.printf("8:%5.3f",(float)bmsparsed->Cell8Voltage/1000.0f); }
+                  if (conf_battcells>=7) { display1.printf("7:%5.03f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
+                  if (conf_battcells>=8) { display1.printf("8:%5.03f",(float)bmsparsed->Cell8Voltage/1000.0f); }
                 #endif  
               break;
               case stopsubscreen_assets: //Single/Dual/Same
@@ -2461,7 +2356,6 @@ void oled_switchscreens() {
               break;
               #if !defined useoled2  
                 case stopsubscreen_espstate: //single
-                    //display1.printf("ESP32 State     (%d/%d)\r\n\r\n",subscreen,stopsubscreens);
                     drawscreen_header(FPSTR(headline_espstate),subscreen,stopsubscreens);
                     display1.print(FPSTR(s_firmware)); display1.println(swversion);
                     display1.print(FPSTR(s_wlan));
@@ -2473,31 +2367,16 @@ void oled_switchscreens() {
                   break;
               #endif
               case stopsubscreen_alarms: //single/dual/same
-               //display1.printf("ALARMCOUNTERS   (%d/%d)",subscreen, stopsubscreens);
-               drawscreen_header(FPSTR(headline_alerts),subscreen,stopsubscreens);
-
-               sprintf(val1buf,"%03d",alertcounter_bmstemp);
-                    sprintf(val2buf,"%03d",alertcounter_esctemp);
-                    sprintf(val3buf,"%03d",alertcounter_cellvoltage);
-                    sprintf(val4buf,"%03d",alertcounter_undervoltage);
-                    drawscreen_data(true, 4, false,
-                        FPSTR(label_bmstemp),&val1buf[0],FPSTR(unit_percent),
-                        FPSTR(label_esctemp),&val2buf[0],FPSTR(unit_mah),
-                        FPSTR(label_cellvoltage),&val3buf[0],FPSTR(unit_mah),
-                        FPSTR(label_undervoltage),&val4buf[0],FPSTR(unit_temp));
-              /*line = dataoffset+baselineoffset;
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("BMS Temp:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(96,line); display1.printf("%03d",alertcounter_bmstemp);
-                //display1.setCursor(119,line); display1.setFont(); display1.print("V");
-              line = dataoffset+baselineoffset*2+linespace;
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("ESC Temp:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(96,line); display1.printf("%03d",alertcounter_esctemp);
-                //display1.setCursor(119,line); display1.setFont(); display1.print("%");
-              line = dataoffset+baselineoffset*3+linespace*2;
-                display1.setFont(&FreeSans9pt7b); display1.setCursor(0,line); display1.print("CellVoltage:");
-                display1.setFont(&FreeSansBold9pt7b); display1.setCursor(96,line); display1.printf("%03d",alertcounter_cellvoltage);
-                //display1.setCursor(119,line); display1.setFont(); display1.print("#");
-              */
+                drawscreen_header(FPSTR(headline_alerts),subscreen,stopsubscreens);
+                sprintf(val1buf,"%03d",alertcounter_bmstemp);
+                sprintf(val2buf,"%03d",alertcounter_esctemp);
+                sprintf(val3buf,"%03d",alertcounter_cellvoltage);
+                sprintf(val4buf,"%03d",alertcounter_undervoltage);
+                drawscreen_data(true, 4, false,
+                    FPSTR(label_bmstemp),&val1buf[0],FPSTR(unit_percent),
+                    FPSTR(label_esctemp),&val2buf[0],FPSTR(unit_mah),
+                    FPSTR(label_cellvoltage),&val3buf[0],FPSTR(unit_mah),
+                    FPSTR(label_undervoltage),&val4buf[0],FPSTR(unit_temp));
               break;
           }
     }
@@ -2505,7 +2384,6 @@ void oled_switchscreens() {
       display1.clearDisplay();
       display1.setFont();
       display1.setCursor(0,0);
-      //display1.printf("startindex: %d\r\nsubscreen: %d\r\nendindex:%d", configstartindex,subscreen,configendindex);
       uint lineitem=0;
       lineitem=0;
       for (uint8_t curline=configstartindex;curline<=configendindex;curline++) {
@@ -2513,7 +2391,6 @@ void oled_switchscreens() {
         if (curline==subscreen) {
           display1.drawRect(0,10*lineitem+3,128,10,WHITE);
         }
-
         switch(curline) {
             case cms_light:
                 display1.print(FPSTR(menu_light));
@@ -2594,55 +2471,48 @@ void oled_switchscreens() {
           #if !defined useoled2
           switch (subscreen) {
             case 1: //Trip Info: Average Speed, Distance, Time, Average Speed 
-                display1.printf("                (%d/2)",subscreen);
-          #else
-                //display1.print("Charging");
+                drawscreen_header(FPSTR(s_blank),subscreen,2);
           #endif
             display1.setTextSize(1);
             display1.setTextColor(WHITE);
             display1.setFont(&FreeSans9pt7b); 
             display1.setCursor(2,baselineoffset);
-            //display1.setCursor(40,10);
-            //display1.setFont();
-            display1.printf("Charging %2d%%", bmsparsed->remainingpercent);
-            //display1.printf("%02u%%", bmsparsed->remainingpercent);
+            display1.print(FPSTR(s_charging));
+            display1.printf(" %2d%%", bmsparsed->remainingpercent);
             display1.drawRect(14,23,100,10,WHITE);
             display1.fillRect(14,24,bmsparsed->remainingpercent,8,WHITE);
             display1.setFont();
-            //display1.setCursor(14,45);
             display1.setCursor(14,39);
             display1.printf("%4.1f V   %4.1f A\r\n", (float)bmsparsed->voltage/100.0f,abs((float)bmsparsed->current/100.0f));
-            //display1.setCursor(14,56);
             display1.setCursor(14,48);
             display1.printf("%4.0f W  %5d mAh",abs(((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f)),bmsparsed->remainingcapacity);
             display1.setCursor(14,57);
-            display1.printf("charged %5d mAh",bmsparsed->remainingcapacity-capacitychargestart);
+            display1.print(FPSTR(s_charged));
+            display1.printf(" %5d mAh",bmsparsed->remainingcapacity-capacitychargestart);
           #if !defined useoled2
               break;
             case 2: //Cell Infos
-                display1.printf("Charging        (%d/2)",subscreen);
-                if (conf_battcells>=1) { display1.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
-                if (conf_battcells>=2) { display1.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
-                if (conf_battcells>=3) { display1.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
-                if (conf_battcells>=4) { display1.printf("04: %5.3f  ",(float)bmsparsed->Cell4Voltage/1000.0f); }
-                if (conf_battcells>=5) { display1.printf("05: %5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
-                if (conf_battcells>=6) { display1.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
-                if (conf_battcells>=7) { display1.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
-                if (conf_battcells>=8) { display1.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
-                if (conf_battcells>=9) { display1.printf("09: %5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
-                if (conf_battcells>=10) { display1.printf("10: %5.3f  ",(float)bmsparsed->Cell10Voltage/1000.0f); }
-                if (conf_battcells>=11) { display1.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
-                if (conf_battcells>=12) { display1.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
-                //display1.printf("Tot: %5.2fV D: %5.3fL: %5.3f H: %5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f,(float)(lowest)/1000.0f,(float)(highest)/1000.0f);
-                if (conf_battcells<11) { display1.printf("L:  %5.3f H:  %5.3f\r\n", (float)(lowest)/1000.0f,(float)(highest)/1000.0f); }
-                display1.printf("T:  %5.2f D:  %5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
+                drawscreen_header(FPSTR(headline_charging),subscreen,2);
+                if (conf_battcells>=1) { display1.printf("01: %5.03f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
+                if (conf_battcells>=2) { display1.printf("02: %5.03f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
+                if (conf_battcells>=3) { display1.printf("03: %5.03f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
+                if (conf_battcells>=4) { display1.printf("04: %5.03f  ",(float)bmsparsed->Cell4Voltage/1000.0f); }
+                if (conf_battcells>=5) { display1.printf("05: %5.03f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
+                if (conf_battcells>=6) { display1.printf("06: %5.03f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
+                if (conf_battcells>=7) { display1.printf("07: %5.03f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
+                if (conf_battcells>=8) { display1.printf("08: %5.03f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
+                if (conf_battcells>=9) { display1.printf("09: %5.03f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                if (conf_battcells>=10) { display1.printf("10: %5.03f  ",(float)bmsparsed->Cell10Voltage/1000.0f); }
+                if (conf_battcells>=11) { display1.printf("11: %5.03f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
+                if (conf_battcells>=12) { display1.printf("12: %5.03f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
+                if (conf_battcells<11) { display1.printf("L:  %5.03f H:  %5.03f\r\n", (float)(lowest)/1000.0f,(float)(highest)/1000.0f); }
+                display1.printf("T:  %5.02f D:  %5.03f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
               break;
           }
           #endif
     }
     //if (screen==screen_timeout) {
     if (screen==screen_error) {
-      //https://mimod.ru/en_US/m365errorcodes/
         #if !defined(useoled2)
           display1.setFont(&fontsmall);
           display1.setCursor(30,20);
@@ -2725,9 +2595,9 @@ void oled_switchscreens() {
             //WLAN STATUS
               display1.setFont();
               display1.setCursor(96,line1);
-              if (wlanstate==wlansearching) { display1.print("WS"); }
-              if (wlanstate==wlanconnected) { display1.print("WC"); }
-              if (wlanstate==wlanap) { display1.print("WA"); }
+              if (wlanstate==wlansearching) { display1.print(FPSTR(s_wlansearchshort)); }
+              if (wlanstate==wlanconnected) { display1.print(FPSTR(s_wlanconshort)); }
+              if (wlanstate==wlanap) { display1.print(FPSTR(s_wlanapshort)); }
             }
           } //else lockstate
 
@@ -2750,58 +2620,41 @@ void oled_switchscreens() {
       oledreinit=false;
     }
     display2.clearDisplay();
+    displaydraw = &display2;
     if (screen==screen_drive) {
-        display1.setFont(&ARIALNB18pt7b); display1.setCursor(0,31); display1.printf("%03.0f", ((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
-        display1.setFont(&ARIALN9pt7b); display1.setCursor(50,31); display1.print("W");
-        display1.setFont(&ARIALNB18pt7b); display1.setCursor(65,31); display1.printf("%03d%%",bmsparsed->remainingpercent);
-        display1.setFont(&ARIALN9pt7b); display1.setCursor(116,31); display1.print("%");
-        display1.setFont(&ARIALNB18pt7b); display1.setCursor(0,63); display1.printf("%02.1f",(float)bmsparsed->voltage/100.0f);
-        display1.setFont(&ARIALN9pt7b); display1.setCursor(50,63); display1.print("V");
-        display1.setFont(&ARIALNB18pt7b); display1.setCursor(65,63); display1.printf("%02.1f",(float)bmsparsed->current/100.0f);
-        display1.setFont(&ARIALN9pt7b); display1.setCursor(116,63); display1.print("A");
+        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(0,31); displaydraw->printf("%03d", uint8_t((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
+        displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(50,31); displaydraw->print(FPSTR(unit_power));
+        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(65,31); displaydraw->printf("%03d",bmsparsed->remainingpercent);
+        displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(116,31); displaydraw->print(FPSTR(unit_percent));
+        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(0,63); displaydraw->printf("%2d",uint8_t((float)bmsparsed->voltage/100.0f));
+        displaydraw->setFont(&ARIALNB9pt7b); displaydraw->setCursor(34,63); displaydraw->printf(".%1d",uint8_t((float)bmsparsed->voltage/10.0f) %10);
+        displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(50,63); displaydraw->print(FPSTR(unit_volt));
+        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(65,63); displaydraw->printf("%02d",uint8_t((float)bmsparsed->current/100.0f));
+        displaydraw->setFont(&ARIALNB9pt7b); displaydraw->setCursor(100,63); displaydraw->printf(".%1d",uint8_t((float)bmsparsed->current/10.0f) %10);
+        displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(116,63); displaydraw->print(FPSTR(unit_current));
     }
     if (screen==screen_stop) {
           display2.setFont();
           display2.setCursor(0,0);
           switch (subscreen) {
             case stopsubscreen_trip: //Temperatures - we have 2 Battery Temperatures, but we only display the higher one - both can be seen on detail screens
-            //TODO
-                display2.setFont(&FreeSans9pt7b); display2.setCursor(0,baselineoffset); display2.print("Batt:");
-                display2.setFont(&FreeSansBold9pt7b); display2.setCursor(60,baselineoffset); 
-                if ((float)bmsparsed->temperature[0]>=(float)bmsparsed->temperature[1]) {
-                  display2.printf("%4.1f",(float)bmsparsed->temperature[0]-20.0f);  
+              sprintf(val1buf,"%4d",bmsparsed->health);
+              if ((float)bmsparsed->temperature[0]>=(float)bmsparsed->temperature[1]) {
+                  sprintf(val1buf,"%4.1f",(float)bmsparsed->temperature[0]-20.0f);  
                 } else {
-                  display2.printf("%4.1f",(float)bmsparsed->temperature[1]-20.0f);  
+                  sprintf(val1buf,"%4.1f",(float)bmsparsed->temperature[1]-20.0f);  
                 }
-                display2.setCursor(100,baselineoffset); display2.setFont(); display2.print(" C"); display2.drawCircle(103,baselineoffset-5,1,WHITE);
-                display2.setFont(&FreeSans9pt7b); display2.setCursor(0,baselineoffset*2+linespace); display2.print("ESC:");
-                display2.setFont(&FreeSansBold9pt7b); display2.setCursor(60,baselineoffset*2+linespace); display2.printf("%4.1f",(float)escparsed->frametemp2/10.0f);
-                display2.setCursor(100,baselineoffset*2+linespace); display2.setFont(); display2.print(" C"); display2.drawCircle(103,baselineoffset*2+linespace-5,1,WHITE);
-                /*
-                display2.setFont(&FreeSans9pt7b); display2.setCursor(0,baselineoffset*3+linespace*2); display2.print("Motor:");
-                display2.setFont(&FreeSansBold9pt7b); display2.setCursor(60,baselineoffset*3+linespace*2); display2.print("00.0");
-                display2.setCursor(100,baselineoffset*3+linespace*2); display2.setFont(); display2.print(" C");
-                */
-                display2.setFont(&FreeSans9pt7b); display2.setCursor(0,baselineoffset*3+linespace*2); display2.print("Volt:");
-                display2.setFont(&FreeSansBold9pt7b); display2.setCursor(60,baselineoffset*3+linespace*2); display2.printf("%4.1f",(float)bmsparsed->voltage/100.0f);
-                display2.setCursor(100,baselineoffset*3+linespace*2); display2.setFont(); display2.print(" V");
-
-                display2.setFont(&FreeSans9pt7b); display2.setCursor(0,baselineoffset*4+linespace*3); display2.print("Batt:");
-                display2.setFont(&FreeSansBold9pt7b); display2.setCursor(60,baselineoffset*4+linespace*3); display2.printf("%5d%",bmsparsed->remainingpercent);
-                display2.setCursor(100,baselineoffset*4+linespace*3); display2.setFont(); display2.print(" %");
-
-                
+              sprintf(val2buf,"%4.1f",(float)escparsed->frametemp2/10.0f);
+              sprintf(val3buf,"%4.1f",(float)bmsparsed->voltage/100.0f);
+              sprintf(val4buf,"%5d",bmsparsed->remainingpercent);
+              drawscreen_data(false, 4, true,
+                FPSTR(label_bmstemp),&val1buf[0],FPSTR(unit_temp),
+                FPSTR(label_esctemp),&val2buf[0],FPSTR(unit_temp),
+                FPSTR(label_volt),&val3buf[0],FPSTR(unit_volt),
+                FPSTR(label_percent),&val4buf[0],FPSTR(unit_percent));
               break;
             case stopsubscreen_minmax:
                 display2.printf("FIX THIS SCREEN (%d/%d)\r\n\r\n",subscreen,stopsubscreens);
-                /*
-                display2.printf("Speed: %04.1f/%04.1f\r\n",(float)speed_min/1000.0f,(float)speed_max/1000.0f);
-                display2.printf("Current: %4.1f/%4.1fA\r\n",(float)current_min/100.0f,(float)current_max/100.0f);
-                display2.printf("Watt: %4d/%4d\r\n",watt_min,watt_max);
-                display2.printf("BattTmp1: %3d/%3d°C\r\n",tb1_min-20,tb1_max-20);
-                display2.printf("BattTmp2: %3d/%3d°C\r\n",tb2_min-20,tb2_max-20);
-                display2.printf("ESC Temp: %4.1f/%4.1f°C\r\n",(float)te_min/10.0f,(float)te_max/10.0f);
-                */
               break;
             case stopsubscreen_batt1:
                 sprintf(val1buf,"%4d",bmsparsed->health);
@@ -2817,15 +2670,15 @@ void oled_switchscreens() {
             case stopsubscreen_cells:
                 display2.setFont(&FreeSans9pt7b); 
                 display2.setCursor(0,12);
-                if (conf_battcells>=9) { display2.printf("9:%5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
-                if (conf_battcells>=10) { display2.printf("X:%5.3f",(float)bmsparsed->Cell10Voltage/1000.0f); }
+                if (conf_battcells>=9) { display2.printf("9:%5.03f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                if (conf_battcells>=10) { display2.printf("X:%5.03f",(float)bmsparsed->Cell10Voltage/1000.0f); }
                 display2.setCursor(0,12+14);
-                if (conf_battcells>=11) { display2.printf("1:%5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
-                if (conf_battcells>=12) { display2.printf("2:%5.3f",(float)bmsparsed->Cell12Voltage/1000.0f); }
+                if (conf_battcells>=11) { display2.printf("1:%5.03f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
+                if (conf_battcells>=12) { display2.printf("2:%5.03f",(float)bmsparsed->Cell12Voltage/1000.0f); }
                 display2.setCursor(0,12+14+14);
-                display2.printf("L:%5.3f H:%5.3f", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
+                display2.printf("L:%5.03f H:%5.03f", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
                 display2.setCursor(0,12+14+14+14);
-                display2.printf("T:%5.2f D:%5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
+                display2.printf("T:%5.02f D:%5.03f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
               break;
             case stopsubscreen_assets:
                 display2.print(FPSTR(headline_espstate));
@@ -2839,7 +2692,6 @@ void oled_switchscreens() {
                 display2.print(FPSTR(s_bleoff));  
               break;
             case stopsubscreen_alarms:
-                //display2.printf("ALARMCOUNTERS   (%d/%d)\r\n",subscreen,stopsubscreens);
                 drawscreen_header(FPSTR(headline_alerts),subscreen,stopsubscreens);
               break;
             default:
@@ -2848,39 +2700,24 @@ void oled_switchscreens() {
                 display2.print("OLED2 STOP DEFAULT");
               break;
           }
-
     }
     if (screen==screen_charging) {
                 display2.setFont();
                 display2.setCursor(0,0);
-                /*if (conf_battcells>=1 & bmsparsed->Cell1Voltage>0) { lowest=_min(lowest,bmsparsed->Cell1Voltage); highest=_max(highest,bmsparsed->Cell1Voltage); }
-                if (conf_battcells>=2 & bmsparsed->Cell2Voltage>0) { lowest=_min(lowest,bmsparsed->Cell2Voltage); highest=_max(highest,bmsparsed->Cell2Voltage); }
-                if (conf_battcells>=3 & bmsparsed->Cell3Voltage>0) { lowest=_min(lowest,bmsparsed->Cell3Voltage); highest=_max(highest,bmsparsed->Cell3Voltage); }
-                if (conf_battcells>=4 & bmsparsed->Cell4Voltage>0) { lowest=_min(lowest,bmsparsed->Cell4Voltage); highest=_max(highest,bmsparsed->Cell4Voltage); }
-                if (conf_battcells>=5 & bmsparsed->Cell5Voltage>0) { lowest=_min(lowest,bmsparsed->Cell5Voltage); highest=_max(highest,bmsparsed->Cell5Voltage); }
-                if (conf_battcells>=6 & bmsparsed->Cell6Voltage>0) { lowest=_min(lowest,bmsparsed->Cell6Voltage); highest=_max(highest,bmsparsed->Cell6Voltage); }
-                if (conf_battcells>=7 & bmsparsed->Cell7Voltage>0) { lowest=_min(lowest,bmsparsed->Cell7Voltage); highest=_max(highest,bmsparsed->Cell7Voltage); }
-                if (conf_battcells>=8 & bmsparsed->Cell8Voltage>0) { lowest=_min(lowest,bmsparsed->Cell8Voltage); highest=_max(highest,bmsparsed->Cell8Voltage); }
-                if (conf_battcells>=9 & bmsparsed->Cell9Voltage>0) { lowest=_min(lowest,bmsparsed->Cell9Voltage); highest=_max(highest,bmsparsed->Cell9Voltage); }
-                if (conf_battcells>=10 & bmsparsed->Cell10Voltage>0) { lowest=_min(lowest,bmsparsed->Cell10Voltage); highest=_max(highest,bmsparsed->Cell10Voltage); }
-                if (conf_battcells>=11 & bmsparsed->Cell11Voltage>0) { lowest=_min(lowest,bmsparsed->Cell11Voltage); highest=_max(highest,bmsparsed->Cell11Voltage); }
-                if (conf_battcells>=12 & bmsparsed->Cell12Voltage>0) { lowest=_min(lowest,bmsparsed->Cell12Voltage); highest=_max(highest,bmsparsed->Cell12Voltage); }
-                */
-                if (conf_battcells>=1) { display2.printf("01: %5.3f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
-                if (conf_battcells>=2) { display2.printf("02: %5.3f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
-                if (conf_battcells>=3) { display2.printf("03: %5.3f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
-                if (conf_battcells>=4) { display2.printf("04: %5.3f  ",(float)bmsparsed->Cell4Voltage/1000.0f); }
-                if (conf_battcells>=5) { display2.printf("05: %5.3f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
-                if (conf_battcells>=6) { display2.printf("06: %5.3f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
-                if (conf_battcells>=7) { display2.printf("07: %5.3f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
-                if (conf_battcells>=8) { display2.printf("08: %5.3f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
-                if (conf_battcells>=9) { display2.printf("09: %5.3f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
-                if (conf_battcells>=10) { display2.printf("10: %5.3f  ",(float)bmsparsed->Cell10Voltage/1000.0f); }
-                if (conf_battcells>=11) { display2.printf("11: %5.3f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
-                if (conf_battcells>=12) { display2.printf("12: %5.3f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
-                //display2.printf("Tot: %5.2fV D: %5.3fL: %5.3f H: %5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f,(float)(lowest)/1000.0f,(float)(highest)/1000.0f);
-                display2.printf("L:  %5.3f H:  %5.3f\r\n", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
-                display2.printf("T:  %5.2f D:  %5.3f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
+                if (conf_battcells>=1) { display2.printf("01: %5.03f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
+                if (conf_battcells>=2) { display2.printf("02: %5.03f  ",(float)bmsparsed->Cell2Voltage/1000.0f); }
+                if (conf_battcells>=3) { display2.printf("03: %5.03f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
+                if (conf_battcells>=4) { display2.printf("04: %5.03f  ",(float)bmsparsed->Cell4Voltage/1000.0f); }
+                if (conf_battcells>=5) { display2.printf("05: %5.03f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
+                if (conf_battcells>=6) { display2.printf("06: %5.03f  ",(float)bmsparsed->Cell6Voltage/1000.0f); }
+                if (conf_battcells>=7) { display2.printf("07: %5.03f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
+                if (conf_battcells>=8) { display2.printf("08: %5.03f  ",(float)bmsparsed->Cell8Voltage/1000.0f); }
+                if (conf_battcells>=9) { display2.printf("09: %5.03f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                if (conf_battcells>=10) { display2.printf("10: %5.03f  ",(float)bmsparsed->Cell10Voltage/1000.0f); }
+                if (conf_battcells>=11) { display2.printf("11: %5.03f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
+                if (conf_battcells>=12) { display2.printf("12: %5.03f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
+                display2.printf("L:  %5.03f H:  %5.03f\r\n", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
+                display2.printf("T:  %5.02f D:  %5.03f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
     }
     if (screen==screen_error) {
       display2.setFont(&fontsmall);
@@ -2922,7 +2759,6 @@ void oled_switchscreens() {
       if (wlanstate==wlanoff) { display2.setCursor(40,57); display2.print(FPSTR(s_wlanoff)); }
 
     }
-
     duration_oled2draw = micros()-timestamp_oled2draw;
     timestamp_oled2transfer=micros();
     display2.display();
@@ -2973,7 +2809,7 @@ void oled1init() {
   #else
     display1.begin(SSD1306_SWITCHCAPVCC);
   #endif
-  display1.setRotation(OLED1_ROTATION); //upside down
+  display1.setRotation(OLED1_ROTATION);
   display1.setTextColor(WHITE);
   display1.setFont();
   display1.setTextSize(1);
@@ -2988,6 +2824,7 @@ void oled2init() {
   #else
     display2.begin(SSD1306_SWITCHCAPVCC);
   #endif
+  display2.setRotation(OLED2_ROTATION);
   display2.setTextColor(WHITE);
   display2.setFont();
   display2.setTextSize(1);

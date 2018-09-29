@@ -3,6 +3,7 @@
   #define useoled1 //comment out to disable oled functionality
   #define useoled2 //comment out if you use only one display
   #define OLED1_ROTATION 2 //0 = normal, 1= 90, 2=180, 3=270° CW
+  #define OLED2_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
 
   //#define usei2c //comment out if using spi
 
