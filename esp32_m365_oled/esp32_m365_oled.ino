@@ -9,8 +9,7 @@
 //add alert / treshold for low battery -> make use of alertcounter_undervoltage
 
 //add alertcounter_escerror to error screen.... -> commit "added esc-errorchecking to housekeeper"
-//new font
-//menu formating
+
 //add popup "window" with/without timeout for popup/alerts (rectangle over content,...)
 //popup for alerts, popup for LOCKED State
 //add ALERT Screen, show when stopped and alert condition set
@@ -44,7 +43,7 @@
 #include "config.h"
 #include "strings.h"
 
-#define swversion "18.09.17"
+#define swversion "18.10.08"
 
 //usually nothing must/should be changed below
 
@@ -77,16 +76,6 @@
 
 
 //old stuff, clean up:
-//    #include <Fonts/FreeSansOblique24pt7b.h>
-//    #include <Fonts/FreeSans18pt7b.h>
-//    #define fontbig FreeSansOblique24pt7b
-    #define fontbigbaselinezero 32
-//    #define fontbigheight 36
-    #include <Fonts/FreeSansBold9pt7b.h>
-    #include <Fonts/FreeSans9pt7b.h>
-    #define fontsmall FreeSansBold9pt7b
-    #define fontsmallbaselinezero 6
-    #define fontsmallheight 18
     #define line1 0
     #define line2 8
     #define line3 16
@@ -132,6 +121,14 @@
   #define menu_fontlabel &ARIALN9pt7b
   #define menu_fontlabelselected &ARIALNB9pt7b
   #define menu_fontdata &ARIALNB9pt7b
+
+  #define popup_fontheader &ARIALNB9pt7b
+  #define popup_header_x 10
+  #define popup_header_y 20
+  #define popup_fonttext &ARIALN9pt7b
+  #define popup_text_x 10
+  #define popup_text_y 42
+
 
     static const unsigned char PROGMEM scooter [] PROGMEM = {
       0x00, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -502,7 +499,7 @@
     #define rq_esc_config 0x0100
 
   //mapping oled screens / requeired data
-    #define numscreens 7
+    #define numscreens 8
     uint16_t rqsarray[numscreens] = {
       rq_esc_essentials|rq_esc_remdist|rq_esc_essentials2|rq_bms_essentials|rq_bms_cells|rq_bms_health|rq_bms_versioninfos|rq_esc_versioninfos, //rq_esc_essentials|rq_bms_essentials|rq_esc_essentials2, //screen_stop
       //0xff, //screen_stop, TODO: Request infos like Serial/FW Version only _once_ (when entering subscreen)
@@ -511,7 +508,8 @@
       rq_esc_essentials, //screen_timeout
       rq_esc_essentials|rq_bms_essentials|rq_bms_cells, //charging
       rq_esc_essentials|rq_esc_config, //configmenu
-      rq_esc_essentials|rq_esc_essentials2|rq_bms_essentials //alarm
+      rq_esc_essentials|rq_esc_essentials2|rq_bms_essentials, //alarm
+      rq_esc_essentials //screen_locked
     };
 
   uint16_t subscribedrequests =  rqsarray[0];
@@ -527,6 +525,7 @@
   #define screen_charging 4
   #define screen_configmenu 5
   #define screen_alarm 6
+  #define screen_locked 7
 
   uint8_t subscreen = 0;
   uint8_t windowsubpos=0;
@@ -1885,9 +1884,13 @@ void handle_configmenu() {
                 } else {
                   sendcommand = cmd_unlock;
                 }
+                screen = screen_stop;
+                subscreen = 0;
+                if (configchanged) { saveconfig(); applyconfig(); }
               break;
             case cms_turnoff:
                 sendcommand = cmd_turnoff;
+                if (configchanged) { saveconfig(); applyconfig(); }
               break;
             case cms_exit:
                 screen = screen_stop;
@@ -1992,6 +1995,16 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
 } //drawscreen
 
 
+void drawscreen_popup(const char *title, char *text) {
+  //singlescreen version:
+  display1.drawRect(3,2,124,62,WHITE); //cheap frame
+  display1.fillRect(4,3,122,60,BLACK);
+  display1.setFont(popup_fontheader); display1.setCursor(popup_header_x, popup_header_y); 
+  display1.print(FPSTR(title));
+  display1.setFont(popup_fonttext); display1.setCursor(popup_text_x, popup_text_y); 
+  display1.print(FPSTR(text));
+}
+
 void drawscreen_screenconfigsingle() {
   uint8_t line = baselineoffset;
     display1.setFont(menu_fontlabel); display1.setCursor(menu_x,line); display1.print("conf entry 1");
@@ -2017,7 +2030,7 @@ void drawscreen_screenconfigsingle() {
 void oled_switchscreens() {
   uint8_t oldscreen = screen;
   
-  //Data/Bus Timeout
+  //1st. prio: Data/Bus Timeout
     if ((m365packettimestamp+m365packettimeout)<millis() & screen!=screen_timeout) {
       screen=screen_timeout;
       updatescreen=true;
@@ -2031,6 +2044,11 @@ void oled_switchscreens() {
       }
       updatescreen=true; 
     }
+
+  //2nd prio - locked?
+  if (escparsed->lockstate==0x02 & screen!=screen_configmenu) {
+    screen=screen_locked;
+  }
   
   //"button" handling
     if (newdata & (bleparsed->brake>=buttonbrakepressed1) & !brakebuttonpressed) {
@@ -2328,7 +2346,7 @@ void oled_switchscreens() {
                   if (conf_battcells>=12) { display1.printf("12: %5.03f  ",(float)bmsparsed->Cell12Voltage/1000.0f); }
                   display1.printf("%s %5.03f", FPSTR(label_maxdiff), (float)(highest-lowest)/1000.0f);
                 #else
-                  display1.setFont(&FreeSans9pt7b); 
+                  display1.setFont(&ARIALN9pt7b); 
                   display1.setCursor(0,21);
                   if (conf_battcells>=1) { display1.printf("1:%5.03f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
                   if (conf_battcells>=2) { display1.printf("2:%5.03f",(float)bmsparsed->Cell2Voltage/1000.0f); }
@@ -2475,7 +2493,7 @@ void oled_switchscreens() {
           #endif
             display1.setTextSize(1);
             display1.setTextColor(WHITE);
-            display1.setFont(&FreeSans9pt7b); 
+            display1.setFont(&ARIALN9pt7b); 
             display1.setCursor(2,baselineoffset);
             display1.print(FPSTR(s_charging));
             display1.printf(" %2d%%", bmsparsed->remainingpercent);
@@ -2514,7 +2532,7 @@ void oled_switchscreens() {
     //if (screen==screen_timeout) {
     if (screen==screen_error) {
         #if !defined(useoled2)
-          display1.setFont(&fontsmall);
+          display1.setFont(&ARIALN9pt7b);
           display1.setCursor(30,20);
           display1.print(FPSTR(error_error));
           display1.setCursor(50,40);
@@ -2545,7 +2563,7 @@ void oled_switchscreens() {
             default: display1.print(FPSTR(error_other)); break;
           }
         #else
-          display1.setFont(&fontsmall);
+          display1.setFont(&ARIALN9pt7b);
           display1.setCursor(50,20);
           display1.print(FPSTR(error_error));
           display1.setCursor(70,45);
@@ -2558,7 +2576,7 @@ void oled_switchscreens() {
         drawscreen_startscreen();
       #else
         display1.drawBitmap(0,0,  scooter, 64,64, 1);
-        display1.setFont(&fontsmall);
+        display1.setFont(&ARIALN9pt7b);
         display1.setCursor(74,15);
         display1.print(FPSTR(s_timeout1));
         display1.setCursor(64,35);
@@ -2570,6 +2588,13 @@ void oled_switchscreens() {
         if (wlanstate==wlanoff) { display1.setCursor(64,56); display1.print(FPSTR(s_wlanoff)); }
       #endif
     }
+    if (screen==screen_locked) {
+      //display1.drawBitmap(0,0,  scooter, 64,64, 1);  
+      display1.setFont();
+      display1.setCursor(39,31);
+      display1.print(FPSTR(s_locked));
+    }
+
       if ((screen==screen_stop)&(subscreen==0)) {
         //Lockstate
           if (escparsed->lockstate==0x02) { 
@@ -2622,14 +2647,14 @@ void oled_switchscreens() {
     display2.clearDisplay();
     displaydraw = &display2;
     if (screen==screen_drive) {
-        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(0,31); displaydraw->printf("%03d", uint8_t((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
+        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(0,31); displaydraw->printf("%3d", uint16_t((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
         displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(50,31); displaydraw->print(FPSTR(unit_power));
-        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(65,31); displaydraw->printf("%03d",bmsparsed->remainingpercent);
+        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(65,31); displaydraw->printf("%3d",bmsparsed->remainingpercent);
         displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(116,31); displaydraw->print(FPSTR(unit_percent));
         displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(0,63); displaydraw->printf("%2d",uint8_t((float)bmsparsed->voltage/100.0f));
         displaydraw->setFont(&ARIALNB9pt7b); displaydraw->setCursor(34,63); displaydraw->printf(".%1d",uint8_t((float)bmsparsed->voltage/10.0f) %10);
         displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(50,63); displaydraw->print(FPSTR(unit_volt));
-        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(65,63); displaydraw->printf("%02d",uint8_t((float)bmsparsed->current/100.0f));
+        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(65,63); displaydraw->printf("%2d",uint8_t((float)bmsparsed->current/100.0f));
         displaydraw->setFont(&ARIALNB9pt7b); displaydraw->setCursor(100,63); displaydraw->printf(".%1d",uint8_t((float)bmsparsed->current/10.0f) %10);
         displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(116,63); displaydraw->print(FPSTR(unit_current));
     }
@@ -2668,7 +2693,7 @@ void oled_switchscreens() {
                     FPSTR(label_tempshort),&val4buf[0],FPSTR(unit_temp));
               break;
             case stopsubscreen_cells:
-                display2.setFont(&FreeSans9pt7b); 
+                display2.setFont(&ARIALN9pt7b); 
                 display2.setCursor(0,12);
                 if (conf_battcells>=9) { display2.printf("9:%5.03f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
                 if (conf_battcells>=10) { display2.printf("X:%5.03f",(float)bmsparsed->Cell10Voltage/1000.0f); }
@@ -2720,7 +2745,7 @@ void oled_switchscreens() {
                 display2.printf("T:  %5.02f D:  %5.03f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
     }
     if (screen==screen_error) {
-      display2.setFont(&fontsmall);
+      display2.setFont(&ARIALN9pt7b);
       display2.setCursor(0,20);
       switch (escparsed->error) {
             case 10: display2.print(FPSTR(error_10)); break;
@@ -2747,7 +2772,7 @@ void oled_switchscreens() {
       }
     }
     if (screen==screen_timeout) {  
-      display2.setFont(&fontsmall);
+      display2.setFont(&ARIALN9pt7b);
       display2.setCursor(40,20);
       display2.print(FPSTR(s_timeout2));
       display2.setCursor(20,40);
@@ -2759,6 +2784,12 @@ void oled_switchscreens() {
       if (wlanstate==wlanoff) { display2.setCursor(40,57); display2.print(FPSTR(s_wlanoff)); }
 
     }
+    if (screen==screen_locked) {  
+      display2.setFont();
+      display2.setCursor(39,31);
+      display2.print(FPSTR(s_locked));
+    }
+
     duration_oled2draw = micros()-timestamp_oled2draw;
     timestamp_oled2transfer=micros();
     display2.display();
