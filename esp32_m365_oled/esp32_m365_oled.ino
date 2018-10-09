@@ -100,6 +100,9 @@
     #define oledreinitduration 30000
     unsigned long oledreinittimestamp = 0;
 
+    unsigned long popuptimestamp = 0;
+    boolean showpopup = false;
+
 
     //buffers for drawscreen stuff
     #define dsvalbuflen 10
@@ -107,6 +110,8 @@
     char val2buf[dsvalbuflen];
     char val3buf[dsvalbuflen];
     char val4buf[dsvalbuflen];
+    char popuptitle[30];
+    char popuptext[100];
 
 //move to screen.h START
   #define sp_lx 0
@@ -1995,14 +2000,21 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
 } //drawscreen
 
 
-void drawscreen_popup(const char *title, char *text) {
+void popup (char *_popuptitle, char *_popuptext, uint16_t duration) {
+  sprintf(popuptitle, "%s", _popuptitle);
+  sprintf(popuptext, "%s", _popuptext);
+  showpopup = true;
+  popuptimestamp = millis()+duration;
+}
+
+void drawscreen_popup() {
   //singlescreen version:
   display1.drawRect(3,2,124,62,WHITE); //cheap frame
   display1.fillRect(4,3,122,60,BLACK);
   display1.setFont(popup_fontheader); display1.setCursor(popup_header_x, popup_header_y); 
-  display1.print(FPSTR(title));
+  display1.print(popuptitle);
   display1.setFont(popup_fonttext); display1.setCursor(popup_text_x, popup_text_y); 
-  display1.print(FPSTR(text));
+  display1.print(popuptext);
 }
 
 void drawscreen_screenconfigsingle() {
@@ -2226,6 +2238,11 @@ void oled_switchscreens() {
     brakebuttonstate=0;
     throttlebuttonstate=0;
     bothbuttonstate=0;
+
+  //popup timeout handling
+  if ((showpopup) & (millis() > popuptimestamp)) {
+    showpopup = false;
+  }
 } //oled_switchscreens
 
 #ifdef useoled1
@@ -2625,6 +2642,10 @@ void oled_switchscreens() {
               if (wlanstate==wlanap) { display1.print(FPSTR(s_wlanapshort)); }
             }
           } //else lockstate
+
+    if (showpopup) {
+      drawscreen_popup();
+    }
 
     duration_oled1draw = micros()-timestamp_oled1draw;
     timestamp_oled1transfer=micros();
