@@ -128,10 +128,10 @@
   #define menu_fontdata &ARIALNB9pt7b
 
   #define popup_fontheader &ARIALNB9pt7b
-  #define popup_header_x 10
-  #define popup_header_y 20
+  #define popup_header_x 13
+  #define popup_header_y 22
   #define popup_fonttext &ARIALN9pt7b
-  #define popup_text_x 10
+  #define popup_text_x 13
   #define popup_text_y 42
 
 
@@ -637,6 +637,7 @@
   uint8_t conf_battcells;
   uint8_t conf_alert_batt_celldiff;
   uint8_t conf_alert_batt_temp;
+  uint8_t conf_alert_batt_voltage;
   uint8_t conf_alert_esc_temp;
   uint8_t conf_unit;
   bool conf_flashprotect;
@@ -660,6 +661,7 @@
   bool alert_cellvoltage = false;
   bool alert_bmstemp = false;
   bool alert_esctemp = false;
+  bool alert_undervoltage = false;
   uint16_t alertcounter_escerror = 0;
   uint16_t alertcounter_cellvoltage = 0;
   uint16_t alertcounter_bmstemp = 0;
@@ -786,6 +788,18 @@ void handle_housekeeper() {
         if (!alert_escerror) {
           alertcounter_escerror++;
           alert_escerror = true;
+          sprintf(tmp1,"%d (eror screen!)",escparsed->error);
+          popup((char*)"ESC ERROR", tmp1, 5000);
+
+        }
+      }
+    //batt low voltage alarm:
+      if ((uint8_t)((float)bmsparsed->voltage/100.0f) < conf_alert_batt_voltage) {
+        if (!alert_undervoltage) {
+          alertcounter_undervoltage++;
+          alert_undervoltage=true;
+          sprintf(tmp1,"%f < %d",(float)bmsparsed->voltage/100.0f,conf_alert_batt_voltage);
+          popup((char*)"LOW BATTERY", tmp1, 5000);
         }
       }
     //cell voltage difference alarm:
@@ -794,6 +808,9 @@ void handle_housekeeper() {
         if (!alert_cellvoltage) {
           alertcounter_cellvoltage++;
           alert_cellvoltage = true;
+          sprintf(tmp1,"%d > %d",(highest-lowest)*100,conf_alert_batt_celldiff);
+          popup((char*)"CELL ALERT", tmp1, 5000);
+          //popup((char*)"CELL ALERT", (char*)"Volt Difference", 5000);
         }
       } else {
         alert_cellvoltage = false;
@@ -803,6 +820,9 @@ void handle_housekeeper() {
         if (!alert_bmstemp) {
           alertcounter_bmstemp++;
           alert_bmstemp = true;
+          sprintf(tmp1,"%d / %d > %d",(bmsparsed->temperature[0]-20),(bmsparsed->temperature[1]-20), conf_alert_batt_temp);
+          popup((char*)"BATT TEMP", tmp1, 5000);
+          //popup((char*)"BATT TEMP", (char*)"Temp over limit!", 5000);
         }
       } else {
         alert_bmstemp = false;
@@ -812,6 +832,8 @@ void handle_housekeeper() {
         if (!alert_esctemp) {
           alertcounter_esctemp++;
           alert_esctemp = true;
+          sprintf(tmp1,"%f > %d",(float)escparsed->frametemp2/10.0f, conf_alert_esc_temp);
+          popup((char*)"ESC TEMP", tmp1, 5000);
         }
       } else {
         alert_esctemp = false;
@@ -819,6 +841,7 @@ void handle_housekeeper() {
     //last step: rearm
       housekeepertimestamp = millis() + housekeepertimeout;
       hkstate = hkwaiting;
+      //popup((char*)"hk title", (char*)"hk text", 1000);
     break;
   } //switch hkstate
 } //handle_housekeeper
@@ -1782,6 +1805,7 @@ void loadconfig() {
   conf_wheelsize = preferences.getUChar("wheelsize", 0); //0=8.5", 1=10"
   conf_battcells = preferences.getUChar("battcells", 10); //10 = 10S, 12 = 12S
   conf_alert_batt_celldiff = preferences.getUChar("alertcelldiff", 5); //50mV difference -> alert
+  conf_alert_batt_voltage = preferences.getUChar("alertlowvoltage", 30); //default 30V 
   conf_alert_batt_temp = preferences.getUChar("alertbatttemp", 50); //50° Celsius -> alert
   conf_alert_esc_temp = preferences.getUChar("alertesctemp", 50);  //50° Celsius -> alert
   conf_flashprotect = preferences.getBool("flashprotect",false);
@@ -1797,6 +1821,7 @@ void saveconfig() {
   preferences.putUChar("wheelsize", conf_wheelsize); //0=8.5", 1=10"
   preferences.putUChar("battcells", conf_battcells); //10 = 10S, 12 = 12S
   preferences.putUChar("alertcelldiff", conf_alert_batt_celldiff); //50mV difference -> alert
+  preferences.putUChar("alertlowvoltage", conf_alert_batt_voltage); //30V default
   preferences.putUChar("alertbatttemp", conf_alert_batt_temp); //50° Celsius -> alert
   preferences.putUChar("alertesctemp", conf_alert_esc_temp);  //50° Celsius -> alert
   preferences.putBool("flashprotect",conf_flashprotect);
@@ -2009,8 +2034,9 @@ void popup (char *_popuptitle, char *_popuptext, uint16_t duration) {
 
 void drawscreen_popup() {
   //singlescreen version:
-  display1.drawRect(3,2,124,62,WHITE); //cheap frame
-  display1.fillRect(4,3,122,60,BLACK);
+  display1.fillRect(4,4,119,55,BLACK);
+  display1.drawRect(6,6,115,51,WHITE); //cheap frame
+  display1.drawRect(7,7,113,49,WHITE); //cheap frame
   display1.setFont(popup_fontheader); display1.setCursor(popup_header_x, popup_header_y); 
   display1.print(popuptitle);
   display1.setFont(popup_fonttext); display1.setCursor(popup_text_x, popup_text_y); 
@@ -2365,17 +2391,17 @@ void oled_switchscreens() {
                 #else
                   display1.setFont(&ARIALN9pt7b); 
                   display1.setCursor(0,21);
-                  if (conf_battcells>=1) { display1.printf("1:%5.03f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
-                  if (conf_battcells>=2) { display1.printf("2:%5.03f",(float)bmsparsed->Cell2Voltage/1000.0f); }
+                  if (conf_battcells>=1) { display1.printf(" 1: %5.03f ",(float)bmsparsed->Cell1Voltage/1000.0f); }
+                  if (conf_battcells>=2) { display1.printf(" 2: %5.03f",(float)bmsparsed->Cell2Voltage/1000.0f); }
                   display1.setCursor(0,35);
-                  if (conf_battcells>=3) { display1.printf("3:%5.03f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
-                  if (conf_battcells>=4) { display1.printf("4:%5.03f",(float)bmsparsed->Cell4Voltage/1000.0f); }
+                  if (conf_battcells>=3) { display1.printf(" 3: %5.03f ",(float)bmsparsed->Cell3Voltage/1000.0f); }
+                  if (conf_battcells>=4) { display1.printf(" 4: %5.03f",(float)bmsparsed->Cell4Voltage/1000.0f); }
                   display1.setCursor(0,49);
-                  if (conf_battcells>=5) { display1.printf("5:%5.03f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
-                  if (conf_battcells>=6) { display1.printf("6:%5.03f",(float)bmsparsed->Cell6Voltage/1000.0f); }
+                  if (conf_battcells>=5) { display1.printf(" 5: %5.03f ",(float)bmsparsed->Cell5Voltage/1000.0f); }
+                  if (conf_battcells>=6) { display1.printf(" 6: %5.03f",(float)bmsparsed->Cell6Voltage/1000.0f); }
                   display1.setCursor(0,63);
-                  if (conf_battcells>=7) { display1.printf("7:%5.03f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
-                  if (conf_battcells>=8) { display1.printf("8:%5.03f",(float)bmsparsed->Cell8Voltage/1000.0f); }
+                  if (conf_battcells>=7) { display1.printf(" 7: %5.03f ",(float)bmsparsed->Cell7Voltage/1000.0f); }
+                  if (conf_battcells>=8) { display1.printf(" 8: %5.03f",(float)bmsparsed->Cell8Voltage/1000.0f); }
                 #endif  
               break;
               case stopsubscreen_assets: //Single/Dual/Same
@@ -2668,15 +2694,15 @@ void oled_switchscreens() {
     display2.clearDisplay();
     displaydraw = &display2;
     if (screen==screen_drive) {
-        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(0,31); displaydraw->printf("%3d", uint16_t((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
+        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(0,31); displaydraw->printf("%3d", int16_t((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
         displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(50,31); displaydraw->print(FPSTR(unit_power));
         displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(65,31); displaydraw->printf("%3d",bmsparsed->remainingpercent);
         displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(116,31); displaydraw->print(FPSTR(unit_percent));
         displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(0,63); displaydraw->printf("%2d",uint8_t((float)bmsparsed->voltage/100.0f));
         displaydraw->setFont(&ARIALNB9pt7b); displaydraw->setCursor(34,63); displaydraw->printf(".%1d",uint8_t((float)bmsparsed->voltage/10.0f) %10);
         displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(50,63); displaydraw->print(FPSTR(unit_volt));
-        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(65,63); displaydraw->printf("%2d",uint8_t((float)bmsparsed->current/100.0f));
-        displaydraw->setFont(&ARIALNB9pt7b); displaydraw->setCursor(100,63); displaydraw->printf(".%1d",uint8_t((float)bmsparsed->current/10.0f) %10);
+        displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(65,63); displaydraw->printf("%2d",int16_t((float)bmsparsed->current/100.0f));
+        displaydraw->setFont(&ARIALNB9pt7b); displaydraw->setCursor(100,63); displaydraw->printf(".%1d",int16_t((float)bmsparsed->current/10.0f) %10);
         displaydraw->setFont(&ARIALN9pt7b); displaydraw->setCursor(116,63); displaydraw->print(FPSTR(unit_current));
     }
     if (screen==screen_stop) {
@@ -2716,15 +2742,15 @@ void oled_switchscreens() {
             case stopsubscreen_cells:
                 display2.setFont(&ARIALN9pt7b); 
                 display2.setCursor(0,12);
-                if (conf_battcells>=9) { display2.printf("9:%5.03f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
-                if (conf_battcells>=10) { display2.printf("X:%5.03f",(float)bmsparsed->Cell10Voltage/1000.0f); }
+                if (conf_battcells>=9) { display2.printf(" 9: %5.03f ",(float)bmsparsed->Cell9Voltage/1000.0f); }
+                if (conf_battcells>=10) { display2.printf("10: %5.03f",(float)bmsparsed->Cell10Voltage/1000.0f); }
                 display2.setCursor(0,12+14);
-                if (conf_battcells>=11) { display2.printf("1:%5.03f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
-                if (conf_battcells>=12) { display2.printf("2:%5.03f",(float)bmsparsed->Cell12Voltage/1000.0f); }
+                if (conf_battcells>=11) { display2.printf("11: %5.03f ",(float)bmsparsed->Cell11Voltage/1000.0f); }
+                if (conf_battcells>=12) { display2.printf("12: %5.03f",(float)bmsparsed->Cell12Voltage/1000.0f); }
                 display2.setCursor(0,12+14+14);
-                display2.printf("L:%5.03f H:%5.03f", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
+                display2.printf("Lo: %5.03f Hi: %5.03f", (float)(lowest)/1000.0f,(float)(highest)/1000.0f);
                 display2.setCursor(0,12+14+14+14);
-                display2.printf("T:%5.02f D:%5.03f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
+                display2.printf("T : %5.02f D : %5.03f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
               break;
             case stopsubscreen_assets:
                 display2.print(FPSTR(headline_espstate));
