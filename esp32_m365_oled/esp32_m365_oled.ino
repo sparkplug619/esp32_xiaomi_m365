@@ -1947,6 +1947,8 @@ void handle_configmenuactions() {
             sendcommand = cmd_lock;
           } else {
             sendcommand = cmd_unlock;
+            screen = screen_stop;
+            subscreen = 0;
           }
           screen = screen_stop;
           subscreen = 0;
@@ -2251,7 +2253,10 @@ void oled_switchscreens() {
   }
   //charging screens: 
     if (newdata & (escparsed->speed==0) & (bmsparsed->current<0) & (screen!=screen_charging)) { 
-      screen=screen_charging; 
+      if  & (screen!=screen_locked) {
+        //only display if not locked...
+        screen=screen_charging; 
+      }
       //timeout_oled=millis()+oledchargestarttimeout;
       capacitychargestart = bmsparsed->remainingcapacity;
       updatescreen=true;
