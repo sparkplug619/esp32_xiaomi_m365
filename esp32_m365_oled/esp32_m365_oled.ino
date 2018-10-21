@@ -1,22 +1,19 @@
 //Clean readme.md
 //commit/push
 
-//fix: display km/mile units (values are correct, just the display of the unit!)
 
+//fix alertcounters -> should not count up if m365 value = 0 (nothing received for that value so far...)
+//add function: beep on alert event
 //add option in menu for beeping on alert
-//add alert / treshold for low battery -> make use of alertcounter_undervoltage
 
 //auto-show ALERT Screen when stopped and alert condition set
 //OR
 //auto-popup errors for some seconds when we where driving and now stopped
 
-//fix alertcounters -> should not count up if m365 value = 0 (nothing received for that value so far...)
-
 //LOCKED AND SPEED? BLINK OLED?
 
 //fix timing/crc issues
 //add trip computer
-//add mqtt logging
 //add navigation code
 //add flashprotetection function
 
@@ -41,7 +38,7 @@
 #include "config.h"
 #include "strings.h"
 
-#define swversion "18.10.08"
+#define swversion "18.10.21"
 
 //usually nothing must/should be changed below
 
@@ -298,7 +295,8 @@
   uint16_t packetsperaddress[256];
   uint16_t requests_sent_bms=0;
   uint16_t requests_sent_esc=0;
-  uint16_t commands_sent=0;
+  uint16_t esccommands_sent=0;
+  uint16_t x1commands_sent=0;
   uint16_t requests_sent_housekeeper=0;
 
   int16_t speed_min = 0;
@@ -426,14 +424,22 @@
   bool senddata = false; //flag - we should send our data request _now_
 
 //M365 - command stuff
-  #define commandlen 10
-  uint8_t command[commandlen] = { 0x55,0xAA,0x04,0x20,0x03,0x01,0x02,0x03,0xB7,0xFF};
-  #define command_cmd 5
-  #define command_value1 6
-  #define command_value2 7
-  #define command_crcstart 2
-  #define command_crc1 8
-  #define command_crc2 9
+  #define esccommandlen 10
+  uint8_t esccommand[esccommandlen] = { 0x55,0xAA,0x04,0x20,0x03,0x01,0x02,0x03,0xB7,0xFF};
+  #define esccommand_cmd 5
+  #define esccommand_value1 6
+  #define esccommand_value2 7
+  #define esccommand_crcstart 2
+  #define esccommand_crc1 8
+  #define esccommand_crc2 9
+
+  #define x1commandlen 12
+  uint8_t x1command[x1commandlen] = { 0x55,0xAA,0x06,0x21,0x64,0x00,0x02,0x07,0x00,0x03,0x68,0xff};
+  #define x1command_beepnum 9
+  #define x1command_crcstart 2
+  #define x1command_crc1 10
+  #define x1command_crc2 11
+
 
   uint8_t sendcommand = 0;
   #define cmd_none 0
@@ -447,7 +453,7 @@
   #define cmd_turnoff 8
   #define cmd_lock 9
   #define cmd_unlock 10
-  //#define cmd_beep 11
+  #define cmd_beep5 11
 
 
 //M365 - request stuff 
@@ -580,14 +586,15 @@
   #define cms_bac 7 //set Battery Alert CellVoltage Difference //WORKING
   #define cms_bat 8 //set Battery Alert Temperature //NOT IMPLEMENTED
   #define cms_eat 9 //set ESC Alert Temperature //NOT IMPLEMENTED
-  #define cms_flashprotection 10 //activate flashprotection //NOT IMPLEMENTED
-  #define cms_navigation 11 //activate ble/komoot navigaton display //NOT IMPLEMENTED
-  #define cms_busmode 12 //busmode active/passive (request data from m365 or not...?) //WORKING
-  #define cms_wifirestart 13 //restart wifi //WORKING
-  #define cms_changelock 14 //WORKING
-  #define cms_turnoff 15 //WORKING
-  #define cms_exit 16 //exitmenu //WORKING
-  #define configsubscreens 17
+  //#define cms_flashprotection 10 //activate flashprotection //NOT IMPLEMENTED
+  //#define cms_navigation 11 //activate ble/komoot navigaton display //NOT IMPLEMENTED
+  #define cms_beeponalert 10
+  #define cms_busmode 11 //busmode active/passive (request data from m365 or not...?) //WORKING
+  #define cms_wifirestart 12 //restart wifi //WORKING
+  #define cms_changelock 13 //WORKING
+  #define cms_turnoff 14 //WORKING
+  #define cms_exit 15 //exitmenu //WORKING
+  #define configsubscreens 16
   uint8_t configwindowsize = (uint8_t)((throttlemax-throttlemin)/(configsubscreens-1));
 #if !defined useoled2
   #define configlinesabove 1
@@ -658,6 +665,7 @@
   uint8_t conf_unit;
   bool conf_flashprotect;
   bool conf_espbusmode;
+  bool conf_beeponalert;
   #define wheelfact8km 1.0f
   #define wheelfact8miles  0.621371192f
   #define wheelfact10km    1.176470588f
@@ -824,31 +832,39 @@ void handle_housekeeper() {
           alertcounter_escerror++;
           alert_escerror = true;
           sprintf(tmp1,"%d (eror screen!)",escparsed->error);
-          popup((char*)"ESC ERROR", tmp1, popupalertduration);
+          alertpopup((char*)"ESC ERROR", tmp1, popupalertduration);
 
         }
+      } else {
+        alert_escerror = false;  
       }
     //batt low voltage alarm:
-      if ((uint8_t)((float)bmsparsed->voltage/100.0f) < conf_alert_batt_voltage) {
-        if (!alert_undervoltage) {
-          alertcounter_undervoltage++;
-          alert_undervoltage=true;
-          sprintf(tmp1,"%f < %d",(float)bmsparsed->voltage/100.0f,conf_alert_batt_voltage);
-          popup((char*)"LOW BATTERY", tmp1, popupalertduration);
+      if (bmsparsed->voltage!=0) {
+        if ((uint8_t)((float)bmsparsed->voltage/100.0f) < conf_alert_batt_voltage) {
+          if (!alert_undervoltage) {
+            alertcounter_undervoltage++;
+            alert_undervoltage=true;
+            sprintf(tmp1,"%f < %d",(float)bmsparsed->voltage/100.0f,conf_alert_batt_voltage);
+            alertpopup((char*)"LOW BATTERY", tmp1, popupalertduration);
+          }
+        } else {
+          alert_undervoltage=false;  
         }
       }
     //cell voltage difference alarm:
       m365_updatebattstats();
-      if ((highest-lowest) >= conf_alert_batt_celldiff*10) {
-        if (!alert_cellvoltage) {
-          alertcounter_cellvoltage++;
-          alert_cellvoltage = true;
-          sprintf(tmp1,"%d > %d",(highest-lowest),conf_alert_batt_celldiff*10);
-          popup((char*)"CELL ALERT", tmp1, popupalertduration);
-          //popup((char*)"CELL ALERT", (char*)"Volt Difference", 5000);
+      if(highest!=lowest) {
+        if ((highest-lowest) >= conf_alert_batt_celldiff*10) {
+          if (!alert_cellvoltage) {
+            alertcounter_cellvoltage++;
+            alert_cellvoltage = true;
+            sprintf(tmp1,"%d > %d",(highest-lowest),conf_alert_batt_celldiff*10);
+            alertpopup((char*)"CELL ALERT", tmp1, popupalertduration);
+            //popup((char*)"CELL ALERT", (char*)"Volt Difference", 5000);
+          }
+        } else {
+          alert_cellvoltage = false;
         }
-      } else {
-        alert_cellvoltage = false;
       }
     //bms temp alarm
       if (((bmsparsed->temperature[1]-20) >=conf_alert_batt_temp) | ((bmsparsed->temperature[0]-20) >= conf_alert_batt_temp)) {
@@ -856,22 +872,24 @@ void handle_housekeeper() {
           alertcounter_bmstemp++;
           alert_bmstemp = true;
           sprintf(tmp1,"%d / %d > %d",(bmsparsed->temperature[0]-20),(bmsparsed->temperature[1]-20), conf_alert_batt_temp);
-          popup((char*)"BATT TEMP", tmp1, popupalertduration);
+          alertpopup((char*)"BATT TEMP", tmp1, popupalertduration);
           //popup((char*)"BATT TEMP", (char*)"Temp over limit!", 5000);
         }
       } else {
         alert_bmstemp = false;
       }
     //esc temp alarm
-      if (((float)escparsed->frametemp2/10.0f) >= (float)conf_alert_esc_temp) {
-        if (!alert_esctemp) {
-          alertcounter_esctemp++;
-          alert_esctemp = true;
-          sprintf(tmp1,"%f > %d",(float)escparsed->frametemp2/10.0f, conf_alert_esc_temp);
-          popup((char*)"ESC TEMP", tmp1, popupalertduration);
+      if (escparsed->frametemp2!=0) {
+        if (((float)escparsed->frametemp2/10.0f) >= (float)conf_alert_esc_temp) {
+          if (!alert_esctemp) {
+            alertcounter_esctemp++;
+            alert_esctemp = true;
+            sprintf(tmp1,"%f > %d",(float)escparsed->frametemp2/10.0f, conf_alert_esc_temp);
+            alertpopup((char*)"ESC TEMP", tmp1, popupalertduration);
+          }
+        } else {
+          alert_esctemp = false;
         }
-      } else {
-        alert_esctemp = false;
       }
     //last step: rearm
       housekeepertimestamp = millis() + housekeepertimeout;
@@ -881,21 +899,34 @@ void handle_housekeeper() {
   } //switch hkstate
 } //handle_housekeeper
 
-
-void m365_sendcommand(uint8_t cvalue, uint8_t cparam1, uint8_t cparam2) {
-  command[command_cmd] = cvalue;
-  command[command_value1] = cparam1;
-  command[command_value2] = cparam2;
+void m365_sendesccommand(uint8_t cvalue, uint8_t cparam1, uint8_t cparam2) {
+  esccommand[esccommand_cmd] = cvalue;
+  esccommand[esccommand_value1] = cparam1;
+  esccommand[esccommand_value2] = cparam2;
   crccalc = 0x00;
-  for(uint8_t i=command_crcstart;i<command_crc1;i++) {
-    crccalc=crccalc + command[i];
+  for(uint8_t i=esccommand_crcstart;i<esccommand_crc1;i++) {
+    crccalc=crccalc + esccommand[i];
   }
   crccalc = crccalc ^ 0xffff;
-  command[command_crc1]=(uint8_t)(crccalc&0xff);
-  command[command_crc2]=(uint8_t)((crccalc&0xff00)>>8);
-  M365Serial.write((unsigned char*)&command,commandlen);
-  commands_sent++;
-} //m365_sendcommand
+  esccommand[esccommand_crc1]=(uint8_t)(crccalc&0xff);
+  esccommand[esccommand_crc2]=(uint8_t)((crccalc&0xff00)>>8);
+  M365Serial.write((unsigned char*)&esccommand,esccommandlen);
+  esccommands_sent++;
+} //m365_sendesccommand
+
+
+void m365_sendx1command(uint8_t beepnum) {
+  x1command[x1command_beepnum] = beepnum;
+  crccalc = 0x00;
+  for(uint8_t i=x1command_crcstart;i<x1command_crc1;i++) {
+    crccalc=crccalc + x1command[i];
+  }
+  crccalc = crccalc ^ 0xffff;
+  x1command[x1command_crc1]=(uint8_t)(crccalc&0xff);
+  x1command[x1command_crc2]=(uint8_t)((crccalc&0xff00)>>8);
+  M365Serial.write((unsigned char*)&x1command,x1commandlen);
+  x1commands_sent++;
+} //m365_sendesccommand
 
 void m365_sendrequest(uint8_t radr, uint8_t roffset, uint8_t rlen) {
     if (radr==address_bms) {
@@ -933,16 +964,18 @@ void m365_handlerequests() {
   //1st prio: send comands?
   if (sendcommand != cmd_none) {
       switch(sendcommand) {
-          case cmd_kers_weak: m365_sendcommand(0x7b,0,0); break;
-          case cmd_kers_medium: m365_sendcommand(0x7b,1,0); break;
-          case cmd_kers_strong: m365_sendcommand(0x7b,2,0); break;
-          case cmd_cruise_on: m365_sendcommand(0x7c,1,0); break;
-          case cmd_cruise_off: m365_sendcommand(0x7c,0,0); break;
-          case cmd_light_on: m365_sendcommand(0x7d,2,0); break;
-          case cmd_light_off: m365_sendcommand(0x7d,0,0); break;
-          case cmd_turnoff: m365_sendcommand(0x79,01,0); break;
-          case cmd_lock: m365_sendcommand(0x70,01,0); break;
-          case cmd_unlock: m365_sendcommand(0x71,01,0); break;
+          case cmd_kers_weak: m365_sendesccommand(0x7b,0,0); break;
+          case cmd_kers_medium: m365_sendesccommand(0x7b,1,0); break;
+          case cmd_kers_strong: m365_sendesccommand(0x7b,2,0); break;
+          case cmd_cruise_on: m365_sendesccommand(0x7c,1,0); break;
+          case cmd_cruise_off: m365_sendesccommand(0x7c,0,0); break;
+          case cmd_light_on: m365_sendesccommand(0x7d,2,0); break;
+          case cmd_light_off: m365_sendesccommand(0x7d,0,0); break;
+          case cmd_turnoff: m365_sendesccommand(0x79,01,0); break;
+          case cmd_lock: m365_sendesccommand(0x70,01,0); break;
+          case cmd_unlock: m365_sendesccommand(0x71,01,0); break;
+          case cmd_beep5: m365_sendx1command(0x05); break;
+            break;
         } //switch sendcommand
     sendcommand = cmd_none; //reset  
   } else {
@@ -1015,8 +1048,6 @@ void m365_handlepacket() {
     m365packetlasttimestamp = millis()-m365packettimestamp;
     m365packettimestamp=millis();
     packetsperaddress[sbuf[i_address]]++;  
-    
-
     #ifdef debug_dump_packetdecode
       sprintf(tmp1,"[%03d] PACKET Len %02X Addr %02X HZ %02X Offset %02X CRC %04X Payload: ",m365packetlasttimestamp,len,sbuf[i_address],sbuf[i_hz],sbuf[i_offset], crccalc);
       DebugSerial.print(tmp1);
@@ -1157,7 +1188,6 @@ void m365_receiver() { //recieves data until packet is complete
   }//serial available
 } //m365_receiver
  
-
 #ifdef usetelnetserver
 void telnet_refreshscreen() {
   uint8_t k=0;
@@ -1225,40 +1255,13 @@ void telnet_refreshscreen() {
             break;
           case ts_statistics:
               telnetclient.printf("Requests Sent:\r\n  ESC: %05d   BMS: %05d   Total: %05d\r\n", requests_sent_esc, requests_sent_bms, requests_sent_bms+requests_sent_esc);
-              telnetclient.printf("Commands Sent: %05d   HK-Cycles: %05d\r\n", commands_sent, requests_sent_housekeeper);
+              telnetclient.printf("Commands Sent: ESC: %05d   X1: %0dd   HK-Cycles: %05d\r\n", esccommands_sent, x1commands_sent, requests_sent_housekeeper);
               telnetclient.printf("Packets Received:\r\n  ESC: %05d   BMS: %05d   BLE: %05d   X1: %05d   unhandled: %05d\r\n", packets_rec_esc,packets_rec_bms,packets_rec_ble,packets_rec_x1,packets_rec_unhandled);
               telnetclient.printf("  CRC OK: %05d   CRC FAIL: %05d\r\n   Total: %05d\r\n",packets_crcok,packets_crcfail,packets_rec);
               telnetclient.printf("\r\nALARM States:\r\n  Cellvoltage Differnce (Is: %d mV, Alert: %d0 mV): %s\r\n",highest-lowest, conf_alert_batt_celldiff, alert_cellvoltage ? "true" : "false");
               telnetclient.printf("  BMS Temperature (Is: %d °C %d °C, Alert: %d °C): %s\r\n",bmsparsed->temperature[1]-20, bmsparsed->temperature[0]-20,conf_alert_batt_temp, alert_bmstemp ? "true" : "false");
               telnetclient.printf("  ESC Temperarture (Is: %3.1f °C, Alert: %d °C): %s\r\n",(float)escparsed->frametemp2/10.0f, conf_alert_esc_temp, alert_esctemp ? "true" : "false");
               telnetclient.printf("  ALARM Counters: Cellvoltage: %d, BMS Temperature: %d, ESC Temperature %d\r\n", alertcounter_cellvoltage, alertcounter_bmstemp, alertcounter_esctemp);
-
-/*                    m365_updatebattstats();
-      if ((highest-lowest)*100 >= conf_alert_batt_celldiff) {
-        alert_cellvoltage = true;
-      } else {
-        alert_cellvoltage = false;
-      }
-    //bms temp alarm
-      if (((bmsparsed->temperature[1]-20) >=conf_alert_batt_temp) | ((bmsparsed->temperature[2]-20) >= conf_alert_batt_temp)) {
-        alert_bmstemp = true;
-      } else {
-        alert_bmstemp = false;
-      }
-    //esc temp alarm
-      if (((float)escparsed->frametemp2/10.0f) >= (float)conf_alert_esc_temp) {
-        alert_esctemp = true;
-      } else {
-        alert_esctemp = false;
-      }
-    //last step: rearm
-      housekeepertimestamp = millis() + housekeepertimeout;
-      hkstate = hkwaiting;
-    break;
-              bool alert_cellvoltage = false;
-  bool alert_bmstemp = false;
-  bool alert_esctemp = false;
-*/
               telnetclient.printf("\r\nTimers:\r\n  Main:   %04.3f ms\r\n  Telnet: %04.3f ms\r\n",(float)duration_mainloop/1000.0f, (float)duration_telnet/1000.0f);
               telnetclient.printf("  OLED Main: %04.3f ms\r\n",(float)duration_oled/1000.0f);
               telnetclient.printf("  OLED1 Draw: %04.3f ms\r\n  OLED1 Transfer:  %04.3f ms\r\n",(float)duration_oled1draw/1000.0f,(float)duration_oled1transfer/1000.0f);
@@ -1377,9 +1380,6 @@ void handle_telnet() {
         }
         DebugSerial.println(":36525");
 #endif        
-
-        
-
         telnetstate = telnetlistening;
         userconnecttimestamp = millis()+userconnecttimeout;  
       break;
@@ -1829,8 +1829,6 @@ void handle_led() {
 
 
 void applyconfig() {
-  //TODO - add conf_unit
-
   if (conf_wheelsize==0 & conf_unit==0) { wheelfact = wheelfact8km; } //8" and kilometers
   if (conf_wheelsize==0 & conf_unit==1) { wheelfact = wheelfact8miles; } //8" and miles
   if (conf_wheelsize==1 & conf_unit==0) { wheelfact = wheelfact10km; } //10" and kilometers
@@ -1847,6 +1845,7 @@ void loadconfig() {
   conf_alert_esc_temp = preferences.getUChar("alertesctemp", 50);  //50° Celsius -> alert
   conf_flashprotect = preferences.getBool("flashprotect",false);
   conf_espbusmode = preferences.getBool("busmode",true); //false = ESP does not request data, true = ESP requests data
+  conf_beeponalert = preferences.getBool("alertbeep",true); //beep if a error occured?
   conf_unit = preferences.getUChar("unit",0); //unit: 0 = kilmeters, 1 = miles
   preferences.end();
   applyconfig();
@@ -1863,6 +1862,7 @@ void saveconfig() {
   preferences.putUChar("alertesctemp", conf_alert_esc_temp);  //50° Celsius -> alert
   preferences.putBool("flashprotect",conf_flashprotect);
   preferences.putBool("busmode",conf_espbusmode); //false = ESP does not request data, true = ESP requests data
+  preferences.putBool("alertbeep",conf_beeponalert); //beep if a error occured? 
   preferences.putUChar("unit",conf_unit); //unit: 0 = kilmeters, 1 = miles
   preferences.end();
 }
@@ -1936,12 +1936,16 @@ void handle_configmenuactions() {
           dialog_edit_int8(FPSTR(s_settemp),&conf_alert_esc_temp,10,100);
           configchanged = true;
         break;
-      case cms_flashprotection: 
+      /*case cms_flashprotection: 
           conf_flashprotect = !conf_flashprotect;
           configchanged = true;
         break;
-      /*case cms_navigation: display1.print("Start Navigation Mode");
+      case cms_navigation: display1.print("Start Navigation Mode");
         break;*/
+      case cms_beeponalert:
+          conf_beeponalert = !conf_beeponalert;
+          configchanged = true;
+        break;
       case cms_busmode: 
           conf_espbusmode = !conf_espbusmode;
           configchanged = true;
@@ -2071,11 +2075,21 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
 } //drawscreen
 
 
-void popup (char *_popuptitle, char *_popuptext, uint16_t duration) {
+void infopopup (char *_popuptitle, char *_popuptext, uint16_t duration) {
   sprintf(popuptitle, "%s", _popuptitle);
   sprintf(popuptext, "%s", _popuptext);
   showpopup = true;
   popuptimestamp = millis()+duration;
+}
+
+void alertpopup (char *_popuptitle, char *_popuptext, uint16_t duration) {
+  sprintf(popuptitle, "%s", _popuptitle);
+  sprintf(popuptext, "%s", _popuptext);
+  showpopup = true;
+  popuptimestamp = millis()+duration;
+  if (conf_beeponalert) {
+    sendcommand = cmd_beep5;
+  }
 }
 
 void drawscreen_popup() {
@@ -2228,7 +2242,7 @@ void oled_switchscreens() {
       subscreen = 0;
       configchanged = false;
       updatescreen = true;
-      popup((char*)"  MENU", (char*)"release throttle!", 1000);
+      infopopup((char*)"  MENU", (char*)"release throttle!", 1000);
     }
 /*
   //exit from configmenu via long-brake-press
@@ -2377,9 +2391,11 @@ void cm_printKey(uint8_t entryid) {
               break;
             case cms_eat: display1.print(FPSTR(menu_escalerttemp));
               break;
-            case cms_flashprotection: display1.print("***shprot");
+            /*case cms_flashprotection: display1.print("***shprot");
               break;
             case cms_navigation: display1.print("***igation");
+              break;*/
+            case cms_beeponalert: display1.print(FPSTR(menu_beeponalert));
               break;
             case cms_busmode: display1.print(FPSTR(menu_espbusmode));
               break;
@@ -2453,6 +2469,13 @@ void cm_printValue(uint8_t entryid) {
               break;
             //case cms_flashprotection: displaydraw->print("no value");
             //case cms_navigation: displaydraw->print("no value");
+            case cms_beeponalert:
+                if (conf_beeponalert) { 
+                  displaydraw->print(FPSTR(menu_on));
+                } else { 
+                  displaydraw->print(FPSTR(menu_off)); 
+                }
+              break;
             case cms_busmode:
                 if (conf_espbusmode) { 
                   displaydraw->print(FPSTR(menu_active));
@@ -2512,10 +2535,10 @@ void cm_printValue(uint8_t entryid) {
                 sprintf(val3buf,"%02d:%02d",escparsed->triptime/60,escparsed->triptime % 60);
                 sprintf(val4buf,"%05.2f",(float)escparsed->remainingdistance/100.0f);
                   drawscreen_data(true, 4, true,
-                      FPSTR(label_averageshort),&val1buf[0],FPSTR(unit_speed),
-                      FPSTR(label_distanceshort),&val2buf[0],FPSTR(unit_distance),
+                      FPSTR(label_averageshort),&val1buf[0],(conf_unit==0?FPSTR(unit_speed_km):FPSTR(unit_speed_miles)),
+                      FPSTR(label_distanceshort),&val2buf[0],(conf_unit==0?FPSTR(unit_distance_km):FPSTR(unit_distance_miles)),
                       FPSTR(label_time),&val3buf[0],FPSTR(label_seconds),
-                      FPSTR(label_remainingshort),&val4buf[0],FPSTR(unit_distance));
+                      FPSTR(label_remainingshort),&val4buf[0],(conf_unit==0?FPSTR(unit_distance_km):FPSTR(unit_distance_miles)));
               break;
               #if !defined useoled2
                 case stopsubscreen_temp: //Single

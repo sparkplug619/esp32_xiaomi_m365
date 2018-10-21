@@ -12,8 +12,10 @@ static const char headline_charging[] PROGMEM = "CHARGING";
 static const char headline_configmenu[] PROGMEM = "CONFIF MENU";
 
 
-static const char unit_speed[] PROGMEM = "kmh";
-static const char unit_distance[] PROGMEM = "km";
+static const char unit_speed_km[] PROGMEM = "kmh";
+static const char unit_speed_miles[] PROGMEM = "mph";
+static const char unit_distance_km[] PROGMEM = "km";
+static const char unit_distance_miles[] PROGMEM = "mi";
 static const char unit_time[] PROGMEM = "s";
 static const char unit_volt[] PROGMEM = "V";
 static const char unit_current[] PROGMEM = "A";
@@ -73,6 +75,8 @@ static const char menu_km[] PROGMEM = "km";
 static const char menu_miles[] PROGMEM = "miles";
 static const char menu_active[] PROGMEM = "active";
 static const char menu_passive[] PROGMEM = "passive";
+static const char menu_beeponalert[] PROGMEM = "Beep on Alert";
+
 
 static const char error_error[] PROGMEM = "ERROR";
 static const char error_10[] PROGMEM = "BLE Communication";
@@ -114,7 +118,7 @@ static const char s_bleoff[] PROGMEM = "BT: OFF";
 static const char s_bmsfw[] PROGMEM = "BMS   FW: %x.%x.%x\r\nSN: %s\r\n";
 static const char s_escfw[] PROGMEM = "ESC   FW: %x.%x.%x\r\nSN: %s\r\n";
 static const char s_pin[] PROGMEM = "Pin: %s\r\n";
-static const char s_miles[] PROGMEM = "Miles: %.2f km\r\n";
+static const char s_miles[] PROGMEM = "Total Distance: %.2f km\r\n";
 static const char s_battdate[] PROGMEM = "Batt-Date: 20%02d-%02d-%02d";
 static const char s_locked[] PROGMEM = "LOCKED";
 static const char s_timeout1[] PROGMEM = "NO";
