@@ -1,24 +1,22 @@
-//Menu: Add Value Changer for Temp-Alerts
 //Clean readme.md
 //commit/push
 
-
 //add option for miles / kilometers -> simply add it to wheelsize/factor stuff
 //todo: add conf_unit handling to applyconfig
+
 //add option in menu for beeping on alert
 //add alert / treshold for low battery -> make use of alertcounter_undervoltage
 
 //add alertcounter_escerror to error screen.... -> commit "added esc-errorchecking to housekeeper"
 
-//add popup "window" with/without timeout for popup/alerts (rectangle over content,...)
-//popup for alerts, popup for LOCKED State
 //add ALERT Screen, show when stopped and alert condition set
-//status display: reformat/change, show LOCKED, PASSIVE, WLAN/BLE/Eco/Normal/Light
+
+//fix alertcounters -> should not count up if m365 value = 0 (nothing received for that value so far...)
 
 //fix timing/crc issues
 //add trip computer
 //add mqtt logging
-//add komoot code for testing nav on oled
+//add navigation code
 //add flashprotetection function
 
 //LOCKED AND SPEED? BLINK/ALERT!!!!
@@ -102,7 +100,13 @@
 
     unsigned long popuptimestamp = 0;
     boolean showpopup = false;
+    #define popupalertduration 5000
 
+    boolean showdialog = false;
+    char diag_title[30];
+    uint8_t *diag_value;
+    uint8_t diag_min;
+    uint8_t diag_max;
 
     //buffers for drawscreen stuff
     #define dsvalbuflen 10
@@ -534,6 +538,8 @@
 
   uint8_t subscreen = 0;
   uint8_t windowsubpos=0;
+
+
   
   #if !defined useoled2 //Single Screen Stopscreens
     #define stopsubscreens 8
@@ -556,10 +562,12 @@
     #define stopsubscreen_alarms 5 //single/dual/same
   #endif
   #define chargesubscreens 2
-  #define gasmin 50
-  #define gasmax 190
-  #define stopwindowsize (uint8_t)((gasmax-gasmin)/stopsubscreens)
-  #define chargewindowsize (uint8_t)((gasmax-gasmin)/chargesubscreens)
+  #define throttlemindefault 40
+  #define throttlemaxdefault 190
+  uint8_t throttlemin = throttlemindefault;
+  uint8_t throttlemax = throttlemaxdefault;
+  uint8_t stopwindowsize = (uint8_t)((throttlemax-throttlemin)/stopsubscreens);
+  uint8_t chargewindowsize = (uint8_t)((throttlemax-throttlemin)/chargesubscreens);
 
 //Config Menu
   #define cms_light 0 //tail ligth on/off //WORKING
@@ -572,19 +580,26 @@
   #define cms_bat 7 //set Battery Alert Temperature //NOT IMPLEMENTED
   #define cms_eat 8 //set ESC Alert Temperature //NOT IMPLEMENTED
   #define cms_flashprotection 9 //activate flashprotection //NOT IMPLEMENTED
-  #define cms_blekomoot 10 //activate ble/komoot navigaton display //NOT IMPLEMENTED
+  #define cms_navigation 10 //activate ble/komoot navigaton display //NOT IMPLEMENTED
   #define cms_busmode 11 //busmode active/passive (request data from m365 or not...?) //WORKING
   #define cms_wifirestart 12 //restart wifi //WORKING
   #define cms_changelock 13 //WORKING
   #define cms_turnoff 14 //WORKING
   #define cms_exit 15 //exitmenu //WORKING
   #define configsubscreens 16
-  #define configwindowsize (uint8_t)((gasmax-gasmin)/(configsubscreens-1))
-  #define configlinesabove 2
-  #define confignumlines 6
+  uint8_t configwindowsize = (uint8_t)((throttlemax-throttlemin)/(configsubscreens-1));
+#if !defined useoled2
+  #define configlinesabove 1
+  #define confignumlines 3
+#else
+  #define configlinesabove 1
+  #define confignumlines 4
+#endif
+
   uint8_t configstartindex = 0;
   uint8_t configendindex = 0;
   bool configchanged = false;
+  uint8_t configcurrentitem = 0;
 
 
 //Misc
@@ -745,6 +760,22 @@ void m365_updatebattstats() {
 }
 
 void m365_updatestats() {
+  //automatic gas learning:
+    if (bleparsed->throttle!=0) {
+      if (throttlemin>bleparsed->throttle) { 
+        throttlemin=bleparsed->throttle; 
+        stopwindowsize = (uint8_t)((throttlemax-throttlemin)/stopsubscreens);
+        chargewindowsize = (uint8_t)((throttlemax-throttlemin)/chargesubscreens);
+        configwindowsize = (uint8_t)((throttlemax-throttlemin)/(configsubscreens-1));
+      }
+      if (throttlemax<bleparsed->throttle) { 
+        throttlemax=bleparsed->throttle;
+        stopwindowsize = (uint8_t)((throttlemax-throttlemin)/stopsubscreens);
+        chargewindowsize = (uint8_t)((throttlemax-throttlemin)/chargesubscreens);
+        configwindowsize = (uint8_t)((throttlemax-throttlemin)/(configsubscreens-1));
+      }
+
+    }
   //Trip
     if (speed_min>escparsed->speed) { speed_min = escparsed->speed; }
     if (speed_max<escparsed->speed) { speed_max = escparsed->speed; }
@@ -789,7 +820,7 @@ void handle_housekeeper() {
           alertcounter_escerror++;
           alert_escerror = true;
           sprintf(tmp1,"%d (eror screen!)",escparsed->error);
-          popup((char*)"ESC ERROR", tmp1, 5000);
+          popup((char*)"ESC ERROR", tmp1, popupalertduration);
 
         }
       }
@@ -799,17 +830,17 @@ void handle_housekeeper() {
           alertcounter_undervoltage++;
           alert_undervoltage=true;
           sprintf(tmp1,"%f < %d",(float)bmsparsed->voltage/100.0f,conf_alert_batt_voltage);
-          popup((char*)"LOW BATTERY", tmp1, 5000);
+          popup((char*)"LOW BATTERY", tmp1, popupalertduration);
         }
       }
     //cell voltage difference alarm:
       m365_updatebattstats();
-      if ((highest-lowest)*100 >= conf_alert_batt_celldiff) {
+      if ((highest-lowest) >= conf_alert_batt_celldiff*10) {
         if (!alert_cellvoltage) {
           alertcounter_cellvoltage++;
           alert_cellvoltage = true;
-          sprintf(tmp1,"%d > %d",(highest-lowest)*100,conf_alert_batt_celldiff);
-          popup((char*)"CELL ALERT", tmp1, 5000);
+          sprintf(tmp1,"%d > %d",(highest-lowest),conf_alert_batt_celldiff*10);
+          popup((char*)"CELL ALERT", tmp1, popupalertduration);
           //popup((char*)"CELL ALERT", (char*)"Volt Difference", 5000);
         }
       } else {
@@ -821,7 +852,7 @@ void handle_housekeeper() {
           alertcounter_bmstemp++;
           alert_bmstemp = true;
           sprintf(tmp1,"%d / %d > %d",(bmsparsed->temperature[0]-20),(bmsparsed->temperature[1]-20), conf_alert_batt_temp);
-          popup((char*)"BATT TEMP", tmp1, 5000);
+          popup((char*)"BATT TEMP", tmp1, popupalertduration);
           //popup((char*)"BATT TEMP", (char*)"Temp over limit!", 5000);
         }
       } else {
@@ -833,7 +864,7 @@ void handle_housekeeper() {
           alertcounter_esctemp++;
           alert_esctemp = true;
           sprintf(tmp1,"%f > %d",(float)escparsed->frametemp2/10.0f, conf_alert_esc_temp);
-          popup((char*)"ESC TEMP", tmp1, 5000);
+          popup((char*)"ESC TEMP", tmp1, popupalertduration);
         }
       } else {
         alert_esctemp = false;
@@ -1830,105 +1861,108 @@ void saveconfig() {
   preferences.end();
 }
 
-void handle_configmenu() {
-  switch(subscreen) {
-            case cms_light:
-                switch(escparsed->taillight) {
-                  case 0: sendcommand = cmd_light_on; break;
-                  case 2: sendcommand = cmd_light_off; break;
-                }
-              break;
-            case cms_cruise:
-                switch(escparsed->cruisemode) {
-                  case 0: sendcommand = cmd_cruise_on; break;
-                  case 1: sendcommand = cmd_cruise_off; break;
-                }
-
-              break;
-            case cms_kers:
-                switch(escparsed->kers) {
-                  case 0: sendcommand = cmd_kers_medium; break;
-                  case 1: sendcommand = cmd_kers_strong; break;
-                  case 2: sendcommand = cmd_kers_weak; break;
-                }
-              break;
-            case cms_ws: 
-                if (conf_wheelsize==0) { 
-                    conf_wheelsize=1; 
-                  } else {
-                    conf_wheelsize=0; 
-                  }
-                  configchanged = true;
-              break;
-            case cms_unit: 
-                if (conf_unit==0) { 
-                    conf_unit=1; 
-                  } else {
-                    conf_unit=0; 
-                  }
-                  configchanged = true;
-              break;
-            case cms_bc: 
-                if (conf_battcells==10) { 
-                  conf_battcells=12; 
-                } else {
-                  conf_battcells=10;
-                }
-                configchanged = true;
-              break;
-            case cms_bac:
-                switch (conf_alert_batt_celldiff) {
-                  case 1: conf_alert_batt_celldiff=3; break;
-                  case 3: conf_alert_batt_celldiff=5; break;
-                  case 5: conf_alert_batt_celldiff=10; break;
-                  case 10: conf_alert_batt_celldiff=20; break;
-                  case 20: conf_alert_batt_celldiff=50; break;
-                  case 50: conf_alert_batt_celldiff=1; break;
-                  default: conf_alert_batt_celldiff=5; break;
-                }
-                configchanged = true;
-              break;
-            /*case cms_bat: display1.printf("Batt Temp Alert: %d C", conf_alert_batt_temp);
-              break;
-            case cms_eat: display1.printf("ESC Temp Alert: %d C", conf_alert_esc_temp);
-              break;*/
-            case cms_flashprotection: 
-                conf_flashprotect = !conf_flashprotect;
-                configchanged = true;
-              break;
-            /*case cms_blekomoot: display1.print("Start BLE for Komoot");
-              break;*/
-            case cms_busmode: 
-                conf_espbusmode = !conf_espbusmode;
-                configchanged = true;
-              break;
-            case cms_wifirestart:
-                wlanstate = wlanturnstaon;
-                screen = screen_stop;
-                subscreen = 0;
-                if (configchanged) { saveconfig(); applyconfig(); }
-              break;
-            case cms_changelock:
-                if (escparsed->lockstate==0x00) { 
-                  sendcommand = cmd_lock;
-                } else {
-                  sendcommand = cmd_unlock;
-                }
-                screen = screen_stop;
-                subscreen = 0;
-                if (configchanged) { saveconfig(); applyconfig(); }
-              break;
-            case cms_turnoff:
-                sendcommand = cmd_turnoff;
-                if (configchanged) { saveconfig(); applyconfig(); }
-              break;
-            case cms_exit:
-                screen = screen_stop;
-                subscreen = 0;
-                if (configchanged) { saveconfig(); applyconfig(); }
-              break;
-          } //switch curline
-} //handle_configmenu
+void handle_configmenuactions() {
+    switch(subscreen) {
+      case cms_light:
+          switch(escparsed->taillight) {
+            case 0: sendcommand = cmd_light_on; break;
+            case 2: sendcommand = cmd_light_off; break;
+          }
+        break;
+      case cms_cruise:
+          switch(escparsed->cruisemode) {
+            case 0: sendcommand = cmd_cruise_on; break;
+            case 1: sendcommand = cmd_cruise_off; break;
+          }
+        break;
+      case cms_kers:
+          switch(escparsed->kers) {
+            case 0: sendcommand = cmd_kers_medium; break;
+            case 1: sendcommand = cmd_kers_strong; break;
+            case 2: sendcommand = cmd_kers_weak; break;
+          }
+        break;
+      case cms_ws: 
+          if (conf_wheelsize==0) { 
+              conf_wheelsize=1; 
+            } else {
+              conf_wheelsize=0; 
+            }
+            configchanged = true;
+        break;
+      case cms_unit: 
+          if (conf_unit==0) { 
+              conf_unit=1; 
+            } else {
+              conf_unit=0; 
+            }
+            configchanged = true;
+        break;
+      case cms_bc: 
+          if (conf_battcells==10) { 
+            conf_battcells=12; 
+          } else {
+            conf_battcells=10;
+          }
+          configchanged = true;
+        break;
+      case cms_bac:
+          switch (conf_alert_batt_celldiff) {
+            case 1: conf_alert_batt_celldiff=3; break;
+            case 3: conf_alert_batt_celldiff=5; break;
+            case 5: conf_alert_batt_celldiff=10; break;
+            case 10: conf_alert_batt_celldiff=20; break;
+            case 20: conf_alert_batt_celldiff=50; break;
+            case 50: conf_alert_batt_celldiff=1; break;
+            default: conf_alert_batt_celldiff=5; break;
+          }
+          configchanged = true;
+        break;
+      case cms_bat:
+          dialog_edit_int8(FPSTR(s_settemp),&conf_alert_batt_temp,10,100);
+          configchanged = true;
+        break;
+      case cms_eat:
+          dialog_edit_int8(FPSTR(s_settemp),&conf_alert_esc_temp,10,100);
+          configchanged = true;
+        break;
+      case cms_flashprotection: 
+          conf_flashprotect = !conf_flashprotect;
+          configchanged = true;
+        break;
+      /*case cms_navigation: display1.print("Start Navigation Mode");
+        break;*/
+      case cms_busmode: 
+          conf_espbusmode = !conf_espbusmode;
+          configchanged = true;
+        break;
+      case cms_wifirestart:
+          wlanstate = wlanturnstaon;
+          screen = screen_stop;
+          subscreen = 0;
+          if (configchanged) { saveconfig(); applyconfig(); }
+        break;
+      case cms_changelock:
+          if (escparsed->lockstate==0x00) { 
+            sendcommand = cmd_lock;
+          } else {
+            sendcommand = cmd_unlock;
+          }
+          screen = screen_stop;
+          subscreen = 0;
+          if (configchanged) { saveconfig(); applyconfig(); }
+        break;
+      case cms_turnoff:
+          sendcommand = cmd_turnoff;
+          if (configchanged) { saveconfig(); applyconfig(); }
+        break;
+      case cms_exit:
+          screen = screen_stop;
+          subscreen = 0;
+          if (configchanged) { saveconfig(); applyconfig(); }
+        break;
+    } //switch curline
+} //handle_configmenuactions
 
 
 //screendrawing start MOVE TO SCREEN.C START
@@ -2043,6 +2077,25 @@ void drawscreen_popup() {
   display1.print(popuptext);
 }
 
+void dialog_edit_int8(const char *_dialogtitle, uint8_t *_value, uint8_t _minvalue, uint8_t _maxvalue) {
+  sprintf(diag_title, "%s", _dialogtitle);
+  diag_value = _value;
+  diag_min = _minvalue;
+  diag_max = _maxvalue;
+  showdialog = true;
+}
+
+void drawscreen_dialog() {
+  //singlescreen version:
+  display1.fillRect(4,4,119,55,BLACK);
+  display1.drawRect(6,6,115,51,WHITE); //cheap frame
+  display1.drawRect(7,7,113,49,WHITE); //cheap frame
+  display1.setFont(popup_fontheader); display1.setCursor(popup_header_x, popup_header_y); 
+  display1.print(diag_title);
+  display1.setFont(popup_fonttext); display1.setCursor(popup_text_x, popup_text_y); 
+  display1.printf("%d",*diag_value);
+}
+
 void drawscreen_screenconfigsingle() {
   uint8_t line = baselineoffset;
     display1.setFont(menu_fontlabel); display1.setCursor(menu_x,line); display1.print("conf entry 1");
@@ -2138,9 +2191,22 @@ void oled_switchscreens() {
     }
   
   //execute commands from configscreen
-    if (screen==screen_configmenu & brakebuttonstate!=0) {
-      handle_configmenu();
-      updatescreen = true;
+    if (screen==screen_configmenu) {
+      if (showdialog) {
+        //1st prio: handle value-change dialogs
+        updatescreen = true;
+        *diag_value = map(bleparsed->throttle,throttlemin,throttlemax,diag_min,diag_max);
+        if (brakebuttonstate!=0) { //brake pressed, exit dialog?
+          showdialog = false;
+        }
+      } else {
+        //2nd prio: handle brake-button actions
+        //if (screen==screen_configmenu & brakebuttonstate!=0 & !showdialog) {
+        if (brakebuttonstate!=0) {  
+          handle_configmenuactions();
+          updatescreen = true;
+        }
+      }
     }
 
   //switch to configmenu
@@ -2150,6 +2216,7 @@ void oled_switchscreens() {
       subscreen = 0;
       configchanged = false;
       updatescreen = true;
+      popup((char*)"  MENU", (char*)"release throttle!", 1000);
     }
 /*
   //exit from configmenu via long-brake-press
@@ -2162,12 +2229,12 @@ void oled_switchscreens() {
     }
     */
   //configmenu navigaton via gas:
-  if (newdata & (screen==screen_configmenu)) {
+  if (newdata & (screen==screen_configmenu) & !showdialog) {
     uint8_t oldsubscreen = subscreen;
-    if (bleparsed->throttle>=gasmin) {
-      subscreen = ((bleparsed->throttle-gasmin) / configwindowsize)+1;
+    if (bleparsed->throttle>=throttlemin) {
+      subscreen = ((bleparsed->throttle-throttlemin) / configwindowsize)+1;
       subscreen=_min(subscreen,configsubscreens-1);
-      windowsubpos = (uint8_t)((float)((bleparsed->throttle-gasmin) % configwindowsize)*(float)oledwidth/(float)configwindowsize);
+      windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % configwindowsize)*(float)oledwidth/(float)configwindowsize);
     } else {
       subscreen=0;
       windowsubpos=0;
@@ -2217,9 +2284,9 @@ void oled_switchscreens() {
   //switching of subscreens via throttle while we are in STOP mode
   if (newdata & (screen==screen_stop)) {
     uint8_t oldsubscreen = subscreen;
-    if (bleparsed->throttle>=gasmin) {
-      subscreen = ((bleparsed->throttle-gasmin) / stopwindowsize)+1;
-      windowsubpos = (uint8_t)((float)((bleparsed->throttle-gasmin) % stopwindowsize)*(float)oledwidth/(float)stopwindowsize);
+    if (bleparsed->throttle>=throttlemin) {
+      subscreen = ((bleparsed->throttle-throttlemin) / stopwindowsize)+1;
+      windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % stopwindowsize)*(float)oledwidth/(float)stopwindowsize);
     } else {
       subscreen=0;
       windowsubpos=0;
@@ -2232,9 +2299,9 @@ void oled_switchscreens() {
   //switching of subscreens via throttle while we are in CHARGE mode, only needed with one screen
   if (newdata & (screen==screen_charging)) {
     uint8_t oldsubscreen = subscreen;
-    if (bleparsed->throttle>=gasmin) {
-      subscreen = ((bleparsed->throttle-gasmin) / chargewindowsize)+1;
-      windowsubpos = (uint8_t)((float)((bleparsed->throttle-gasmin) % chargewindowsize)*(float)oledwidth/(float)chargewindowsize);
+    if (bleparsed->throttle>=throttlemin) {
+      subscreen = ((bleparsed->throttle-throttlemin) / chargewindowsize)+1;
+      windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % chargewindowsize)*(float)oledwidth/(float)chargewindowsize);
     } else {
       subscreen=1;
       windowsubpos=0;
@@ -2271,9 +2338,119 @@ void oled_switchscreens() {
   }
 } //oled_switchscreens
 
+void cm_printKey(uint8_t entryid) {
+          switch(entryid) {
+            case cms_light: display1.print(FPSTR(menu_light));
+              break;
+            case cms_cruise: 
+                display1.print(FPSTR(menu_cruise));
+              break;
+            case cms_kers: 
+                display1.print(FPSTR(menu_kers));
+              break;
+            case cms_ws: display1.print(FPSTR(menu_wheelsize));
+              break;
+            case cms_unit: display1.print(FPSTR(menu_unit));
+              break;
+            case cms_bc: display1.print(FPSTR(menu_battcells));
+              break;
+            case cms_bac: display1.print(FPSTR(menu_battalertcell));
+              break;
+            case cms_bat: display1.print(FPSTR(menu_battalerttemp));
+              break;
+            case cms_eat: display1.print(FPSTR(menu_escalerttemp));
+              break;
+            case cms_flashprotection: display1.print("***shprot");
+              break;
+            case cms_navigation: display1.print("***igation");
+              break;
+            case cms_busmode: display1.print(FPSTR(menu_espbusmode));
+              break;
+            case cms_wifirestart: display1.print(FPSTR(menu_espwifirestart));
+              break;
+            case cms_changelock: 
+                  if (escparsed->lockstate==0x00) {
+                    display1.print(FPSTR(menu_m365lock));
+                  } else {
+                    display1.print(FPSTR(menu_m365unlock));
+                  }
+              break;
+            case cms_turnoff: display1.print(FPSTR(menu_m365turnoff));
+              break;
+            case cms_exit: display1.print(FPSTR(menu_exit));
+              break;
+          } //switch curline
+}
+
+void cm_printValue(uint8_t entryid) {
+  #if!defined useoled2
+    displaydraw->setCursor(5,dataoffset+baselineoffset + 3*(baselineoffset+linespace));
+    displaydraw->drawFastHLine(0,dataoffset+baselineoffset + 2*(baselineoffset+linespace)-linespace-linespace,128,WHITE);
+  #endif
+  #ifdef useoled2
+    displaydraw->setCursor(5,31-baselineoffset/2);
+  #endif
+          switch(entryid) {
+            case cms_light:
+                  switch(escparsed->taillight) {
+                    case 0: displaydraw->print(FPSTR(menu_off)); break;
+                    case 2: displaydraw->print(FPSTR(menu_on)); break;
+                  }
+              break;
+            case cms_cruise: 
+                  switch(escparsed->cruisemode) {
+                    case 0: displaydraw->print(FPSTR(menu_off)); break;
+                    case 1: displaydraw->print(FPSTR(menu_on)); break;
+                  }
+              break;
+            case cms_kers: 
+                  switch(escparsed->kers) {
+                    case 0: displaydraw->print(FPSTR(menu_weak)); break;
+                    case 1: displaydraw->print(FPSTR(menu_medium)); break;
+                    case 2: displaydraw->print(FPSTR(menu_strong)); break;
+                  }
+              break;
+            case cms_ws: 
+                if (conf_wheelsize==0) { displaydraw->print("8.5\""); }
+                if (conf_wheelsize==1) { displaydraw->print("10\""); }
+                if (conf_wheelsize>1) { displaydraw->print("???"); }
+              break;
+            case cms_unit: 
+                if (conf_unit==0) { displaydraw->print(FPSTR(menu_km)); }
+                if (conf_unit==1) { displaydraw->print(FPSTR(menu_miles)); }
+              break;
+            case cms_bc:
+                displaydraw->printf("%d", conf_battcells);
+              break;
+            case cms_bac:
+                displaydraw->printf("%d0 mV", conf_alert_batt_celldiff);
+              break;
+            case cms_bat:
+                  displaydraw->printf("%d C", conf_alert_batt_temp);
+              break;
+            case cms_eat:
+                    displaydraw->printf("%d C", conf_alert_esc_temp);
+              break;
+            //case cms_flashprotection: displaydraw->print("no value");
+            //case cms_navigation: displaydraw->print("no value");
+            case cms_busmode:
+                if (conf_espbusmode) { 
+                  displaydraw->print(FPSTR(menu_active));
+                } else { 
+                  displaydraw->print(FPSTR(menu_passive)); 
+                }
+              break;
+            //case cms_wifirestart: displaydraw->print("no value");
+            //case cms_changelock:  displaydraw->print("no value");
+            //case cms_turnoff:  displaydraw->print("no value");
+            //case cms_exit:  displaydraw->print("no value");
+          } //switch curline
+}
+
 #ifdef useoled1
   void oled1_update() {
     uint8_t line;
+    uint8_t lineitem;
     timestamp_oled1draw=micros();
 
     if (oledreinit) {
@@ -2442,86 +2619,27 @@ void oled_switchscreens() {
           }
     }
     if (screen == screen_configmenu) {
-      display1.clearDisplay();
-      display1.setFont();
-      display1.setCursor(0,0);
-      uint lineitem=0;
+      
       lineitem=0;
       for (uint8_t curline=configstartindex;curline<=configendindex;curline++) {
-        display1.setCursor(5,10*lineitem+5);
         if (curline==subscreen) {
-          display1.drawRect(0,10*lineitem+3,128,10,WHITE);
+          display1.setFont(sp_fontdata);
+          #if !defined useoled2
+            cm_printValue(curline);
+          #endif
+          #ifdef useoled2
+            configcurrentitem=curline;
+          #endif
+        } else {
+          display1.setFont(sp_fontlabel);
         }
-        switch(curline) {
-            case cms_light:
-                display1.print(FPSTR(menu_light));
-                  switch(escparsed->taillight) {
-                    case 0: display1.print(FPSTR(menu_off)); break;
-                    case 2: display1.print(FPSTR(menu_on)); break;
-                  }
-              break;
-            case cms_cruise: 
-                display1.print(FPSTR(menu_cruise));
-                  switch(escparsed->cruisemode) {
-                    case 0: display1.print(FPSTR(menu_off)); break;
-                    case 1: display1.print(FPSTR(menu_on)); break;
-                  }
-              break;
-            case cms_kers: 
-                display1.print(FPSTR(menu_kers));
-                  switch(escparsed->kers) {
-                    case 0: display1.print(FPSTR(menu_weak)); break;
-                    case 1: display1.print(FPSTR(menu_medium)); break;
-                    case 2: display1.print(FPSTR(menu_strong)); break;
-                  }
-              break;
-            case cms_ws: display1.print(FPSTR(menu_wheelsize));
-                if (conf_wheelsize==0) { display1.print("8.5\""); }
-                if (conf_wheelsize==1) { display1.print("10\""); }
-                if (conf_wheelsize>1) { display1.print("???"); }
-              break;
-            case cms_unit: display1.print(FPSTR(menu_unit));
-                if (conf_unit==0) { display1.print(FPSTR(menu_km)); }
-                if (conf_unit==1) { display1.print(FPSTR(menu_miles)); }
-              break;
-            case cms_bc: display1.print(FPSTR(menu_battcells));
-                      display1.printf("%d", conf_battcells);
-              break;
-            case cms_bac: display1.print(FPSTR(menu_battalertcell));
-                display1.printf("%d0 mV", conf_alert_batt_celldiff);
-
-              break;
-            case cms_bat: display1.print(FPSTR(menu_battalerttemp));
-                  display1.printf("%d C", conf_alert_batt_temp);
-              break;
-            case cms_eat: display1.print(FPSTR(menu_escalerttemp));
-                    display1.printf("%d C", conf_alert_esc_temp);
-              break;
-            case cms_flashprotection: display1.print("***");
-                //display1.print("Flashprotection: ");
-                //if (conf_flashprotect) { display1.print("On"); } else { display1.print("Off"); }
-              break;
-            case cms_blekomoot: display1.print("***");
-                //display1.print("Start BLE for Komoot");
-              break;
-            case cms_busmode: display1.print(FPSTR(menu_espbusmode));
-                if (conf_espbusmode) { display1.print(FPSTR(menu_active)); } else { display1.print(FPSTR(menu_passive)); }
-              break;
-            case cms_wifirestart: display1.print(FPSTR(menu_espwifirestart));
-              break;
-            case cms_changelock: 
-                  if (escparsed->lockstate==0x00) {
-                    display1.print(FPSTR(menu_m365lock));
-                  } else {
-                    display1.print(FPSTR(menu_m365unlock));
-                  }
-              break;
-            case cms_turnoff: display1.print(FPSTR(menu_m365turnoff));
-              break;
-            case cms_exit: display1.print(FPSTR(menu_exit));
-              break;
-          } //switch curline
-          lineitem++;
+        //#if !defined useoled2
+          display1.setCursor(5,baselineoffset + lineitem*(baselineoffset+linespace));
+        //#else
+          display1.setCursor(5,baselineoffset + lineitem*(baselineoffset+linespace));
+        //#endif
+        cm_printKey(curline);
+        lineitem++;
       } //curline loop
     } //screen == screen_configmenu
     if (screen==screen_charging) {
@@ -2672,7 +2790,11 @@ void oled_switchscreens() {
     if (showpopup) {
       drawscreen_popup();
     }
-
+//    #if !defined useoled2
+      if (showdialog) {
+        drawscreen_dialog();
+      }
+  //  #endif
     duration_oled1draw = micros()-timestamp_oled1draw;
     timestamp_oled1transfer=micros();
     display1.display();
@@ -2773,6 +2895,10 @@ void oled_switchscreens() {
               break;
           }
     }
+    if (screen == screen_configmenu) {
+        display2.setFont(sp_fontdata);
+        cm_printValue(configcurrentitem);
+    } //screen == screen_configmenu
     if (screen==screen_charging) {
                 display2.setFont();
                 display2.setCursor(0,0);
@@ -2977,11 +3103,14 @@ void setup() {
           client.publish(tmp1, "OTA Starting");
         }
     #endif
-    #ifdef useoled1
+    #if !defined useoled2
+        oled1init();
         display1.clearDisplay();
         display1.display();
     #endif
     #ifdef useoled2
+        oled1init();
+        oled2init();
         display1.clearDisplay();
         drawscreen_startscreen();
         display1.display();
@@ -3097,4 +3226,3 @@ void loop() {
   #endif
   duration_mainloop=micros()-timestamp_mainloopstart;
 }
-
