@@ -2231,7 +2231,7 @@ void oled_switchscreens() {
   //configmenu navigaton via gas:
   if (newdata & (screen==screen_configmenu) & !showdialog) {
     uint8_t oldsubscreen = subscreen;
-    if (bleparsed->throttle>=throttlemin) {
+    if (bleparsed->throttle>throttlemin+5) {
       subscreen = ((bleparsed->throttle-throttlemin) / configwindowsize)+1;
       subscreen=_min(subscreen,configsubscreens-1);
       windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % configwindowsize)*(float)oledwidth/(float)configwindowsize);
@@ -2284,7 +2284,7 @@ void oled_switchscreens() {
   //switching of subscreens via throttle while we are in STOP mode
   if (newdata & (screen==screen_stop)) {
     uint8_t oldsubscreen = subscreen;
-    if (bleparsed->throttle>=throttlemin) {
+    if (bleparsed->throttle>throttlemin+5) {
       subscreen = ((bleparsed->throttle-throttlemin) / stopwindowsize)+1;
       windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % stopwindowsize)*(float)oledwidth/(float)stopwindowsize);
     } else {
@@ -2758,11 +2758,11 @@ void cm_printValue(uint8_t entryid) {
 
       if ((screen==screen_stop)&(subscreen==0)) {
         //Lockstate
-          if (escparsed->lockstate==0x02) { 
-            display1.setFont();
-            display1.setCursor(88,line1);
-            display1.print(FPSTR(s_locked));
-          } else {
+          //if (escparsed->lockstate==0x02) { 
+          //  display1.setFont();
+          //  display1.setCursor(88,line1);
+          //  display1.print(FPSTR(s_locked));
+          //} else {
         
             //LIGHT ON/OFF
               if (x1parsed->light==0x64) { 
@@ -2785,7 +2785,7 @@ void cm_printValue(uint8_t entryid) {
               if (wlanstate==wlanconnected) { display1.print(FPSTR(s_wlanconshort)); }
               if (wlanstate==wlanap) { display1.print(FPSTR(s_wlanapshort)); }
             }
-          } //else lockstate
+          //} //else lockstate
 
     if (showpopup) {
       drawscreen_popup();
