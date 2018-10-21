@@ -46,6 +46,7 @@ static const char label_bmstemp[] PROGMEM = "BMS Tmp:"; //alert screen
 static const char label_esctemp[] PROGMEM = "ESC Tmp:"; //alert screen
 static const char label_cellvoltage[] PROGMEM = "Cell Diff:"; //alert screen
 static const char label_undervoltage[] PROGMEM = "Low Voltage"; //alert screen
+static const char label_escerrorcounter[] PROGMEM = "ESC Err:"; //alert screen
 
 static const char menu_light[] PROGMEM = "Tail Light";
 static const char menu_cruise[] PROGMEM = "Cruise Control";
@@ -123,3 +124,4 @@ static const char s_blank[] PROGMEM = " ";
 static const char s_charging[] PROGMEM = "Charging";
 static const char s_charged[] PROGMEM = "charged";
 static const char s_settemp[] PROGMEM = "set Temp:";
+static const char s_setvolt[] PROGMEM = "set Volt:";

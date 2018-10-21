@@ -1,17 +1,18 @@
 //Clean readme.md
 //commit/push
 
-//add option for miles / kilometers -> simply add it to wheelsize/factor stuff
-//todo: add conf_unit handling to applyconfig
+//fix: display km/mile units (values are correct, just the display of the unit!)
 
 //add option in menu for beeping on alert
 //add alert / treshold for low battery -> make use of alertcounter_undervoltage
 
-//add alertcounter_escerror to error screen.... -> commit "added esc-errorchecking to housekeeper"
-
-//add ALERT Screen, show when stopped and alert condition set
+//auto-show ALERT Screen when stopped and alert condition set
+//OR
+//auto-popup errors for some seconds when we where driving and now stopped
 
 //fix alertcounters -> should not count up if m365 value = 0 (nothing received for that value so far...)
+
+//LOCKED AND SPEED? BLINK OLED?
 
 //fix timing/crc issues
 //add trip computer
@@ -19,7 +20,6 @@
 //add navigation code
 //add flashprotetection function
 
-//LOCKED AND SPEED? BLINK/ALERT!!!!
 
 
 //******************************************
@@ -576,17 +576,18 @@
   #define cms_ws 3 //set wheelsize //WORKING
   #define cms_unit 4 //kilometers or miles?
   #define cms_bc 5 //set number of cells (10/12s) //WORKING
-  #define cms_bac 6 //set Battery Alert CellVoltage Difference //WORKING
-  #define cms_bat 7 //set Battery Alert Temperature //NOT IMPLEMENTED
-  #define cms_eat 8 //set ESC Alert Temperature //NOT IMPLEMENTED
-  #define cms_flashprotection 9 //activate flashprotection //NOT IMPLEMENTED
-  #define cms_navigation 10 //activate ble/komoot navigaton display //NOT IMPLEMENTED
-  #define cms_busmode 11 //busmode active/passive (request data from m365 or not...?) //WORKING
-  #define cms_wifirestart 12 //restart wifi //WORKING
-  #define cms_changelock 13 //WORKING
-  #define cms_turnoff 14 //WORKING
-  #define cms_exit 15 //exitmenu //WORKING
-  #define configsubscreens 16
+  #define cms_buv 6 //set Battery undervoltage alarm
+  #define cms_bac 7 //set Battery Alert CellVoltage Difference //WORKING
+  #define cms_bat 8 //set Battery Alert Temperature //NOT IMPLEMENTED
+  #define cms_eat 9 //set ESC Alert Temperature //NOT IMPLEMENTED
+  #define cms_flashprotection 10 //activate flashprotection //NOT IMPLEMENTED
+  #define cms_navigation 11 //activate ble/komoot navigaton display //NOT IMPLEMENTED
+  #define cms_busmode 12 //busmode active/passive (request data from m365 or not...?) //WORKING
+  #define cms_wifirestart 13 //restart wifi //WORKING
+  #define cms_changelock 14 //WORKING
+  #define cms_turnoff 15 //WORKING
+  #define cms_exit 16 //exitmenu //WORKING
+  #define configsubscreens 17
   uint8_t configwindowsize = (uint8_t)((throttlemax-throttlemin)/(configsubscreens-1));
 #if !defined useoled2
   #define configlinesabove 1
@@ -657,8 +658,11 @@
   uint8_t conf_unit;
   bool conf_flashprotect;
   bool conf_espbusmode;
-  #define wheelfact10 1.1764705882352941176470588235294f
-  #define wheelfact8 1.0f
+  #define wheelfact8km 1.0f
+  #define wheelfact8miles  0.621371192f
+  #define wheelfact10km    1.176470588f
+  #define wheelfact10miles 0.731024932f
+
   float wheelfact = 0;
 
 //housekeeper (manages alerts,...)
@@ -1827,8 +1831,10 @@ void handle_led() {
 void applyconfig() {
   //TODO - add conf_unit
 
-  if (conf_wheelsize==0) { wheelfact = wheelfact8; }
-  if (conf_wheelsize==1) { wheelfact = wheelfact10; }
+  if (conf_wheelsize==0 & conf_unit==0) { wheelfact = wheelfact8km; } //8" and kilometers
+  if (conf_wheelsize==0 & conf_unit==1) { wheelfact = wheelfact8miles; } //8" and miles
+  if (conf_wheelsize==1 & conf_unit==0) { wheelfact = wheelfact10km; } //10" and kilometers
+  if (conf_wheelsize==1 & conf_unit==1) { wheelfact = wheelfact10miles; } //10" and miles
 }
 
 void loadconfig() {
@@ -1898,6 +1904,10 @@ void handle_configmenuactions() {
             }
             configchanged = true;
         break;
+      case cms_buv:
+            dialog_edit_int8(FPSTR(s_setvolt),&conf_alert_batt_voltage,10,40);
+            configchanged = true;
+          break;
       case cms_bc: 
           if (conf_battcells==10) { 
             conf_battcells=12; 
@@ -2253,7 +2263,7 @@ void oled_switchscreens() {
   }
   //charging screens: 
     if (newdata & (escparsed->speed==0) & (bmsparsed->current<0) & (screen!=screen_charging)) { 
-      if  & (screen!=screen_locked) {
+      if  (screen!=screen_locked) {
         //only display if not locked...
         screen=screen_charging; 
       }
@@ -2357,6 +2367,8 @@ void cm_printKey(uint8_t entryid) {
               break;
             case cms_unit: display1.print(FPSTR(menu_unit));
               break;
+            case cms_buv: display1.print(FPSTR(menu_battalertlowvoltage));
+              break;
             case cms_bc: display1.print(FPSTR(menu_battcells));
               break;
             case cms_bac: display1.print(FPSTR(menu_battalertcell));
@@ -2426,6 +2438,9 @@ void cm_printValue(uint8_t entryid) {
               break;
             case cms_bc:
                 displaydraw->printf("%d", conf_battcells);
+              break;
+            case cms_buv: 
+                displaydraw->printf("%d V", conf_alert_batt_voltage);
               break;
             case cms_bac:
                 displaydraw->printf("%d0 mV", conf_alert_batt_celldiff);
@@ -2892,6 +2907,12 @@ void cm_printValue(uint8_t entryid) {
               break;
             case stopsubscreen_alarms:
                 drawscreen_header(FPSTR(headline_alerts),subscreen,stopsubscreens);
+                sprintf(val1buf,"%03d",alertcounter_escerror);
+                drawscreen_data(true, 1, false,
+                    FPSTR(label_escerrorcounter),&val1buf[0],FPSTR(unit_percent),
+                    NULL,NULL,NULL,
+                    NULL,NULL,NULL,
+                    NULL,NULL,NULL);
               break;
             default:
                 display2.setFont();
