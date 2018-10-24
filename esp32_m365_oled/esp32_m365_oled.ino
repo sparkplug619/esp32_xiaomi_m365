@@ -1,10 +1,15 @@
 //Clean readme.md
 //commit/push
+//add fonts to repo
 
+//check:
+//alertcounters should not count on startup
+//beep on alert option...?
+//mile/km display of units
+//does it beep???
+//alertcounter on 2nd screen..?
 
-//fix alertcounters -> should not count up if m365 value = 0 (nothing received for that value so far...)
-//add function: beep on alert event
-//add option in menu for beeping on alert
+//mode edit_int8 dialog to 2nd screen
 
 //auto-show ALERT Screen when stopped and alert condition set
 //OR
@@ -16,8 +21,6 @@
 //add trip computer
 //add navigation code
 //add flashprotetection function
-
-
 
 //******************************************
 //*************************************
@@ -1944,6 +1947,7 @@ void handle_configmenuactions() {
         break;*/
       case cms_beeponalert:
           conf_beeponalert = !conf_beeponalert;
+          sendcommand = cmd_beep5; //just for testing purposes, remove later...
           configchanged = true;
         break;
       case cms_busmode: 
@@ -2023,8 +2027,8 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
         case 0:
             if (headline & lines==4) { line = dataoffset+baselineoffset; }
             if (!headline & lines==4) { line = baselineoffset; }
-            if (headline & lines==3) { line = dataoffset+baselineoffset+5;}
-            if (!headline & lines==3) { line = baselineoffset; }
+            if (headline & lines<=3) { line = dataoffset+baselineoffset+5;}
+            if (!headline & lines<=3) { line = baselineoffset; }
             displaydraw->setFont(sp_fontlabel); displaydraw->setCursor(sp_lx,line); displaydraw->print(FPSTR(l1));
             if (showunits) {
               displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dx,line); displaydraw->printf(v1);
@@ -2036,8 +2040,8 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
         case 1:
             if (headline & lines==4) { line = dataoffset+baselineoffset*2+linespace; }
             if (!headline & lines==4) { line = baselineoffset*2+linespace+2;}
-            if (headline & lines==3) { line = dataoffset+baselineoffset*2+10; }
-            if (!headline & lines==3) { line = baselineoffset*2+5+4; }
+            if (headline & lines<=3) { line = dataoffset+baselineoffset*2+10; }
+            if (!headline & lines<=3) { line = baselineoffset*2+5+4; }
             displaydraw->setFont(sp_fontlabel); displaydraw->setCursor(sp_lx,line); displaydraw->print(FPSTR(l2));
             if (showunits) {
               displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dx,line); displaydraw->printf(v2);
@@ -2049,8 +2053,8 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
         case 2:
             if (headline & lines==4) { line = dataoffset+baselineoffset*3+linespace*2; }
             if (!headline & lines==4) { line = baselineoffset*3+linespace*2+5;}
-            if (headline & lines==3) { line = dataoffset+baselineoffset*3+15; }
-            if (!headline & lines==3) { line = baselineoffset*3+10+8; }
+            if (headline & lines<=3) { line = dataoffset+baselineoffset*3+15; }
+            if (!headline & lines<=3) { line = baselineoffset*3+10+8; }
             displaydraw->setFont(sp_fontlabel); displaydraw->setCursor(sp_lx,line); displaydraw->print(FPSTR(l3));
             if (showunits) {
               displaydraw->setFont(sp_fontdata); displaydraw->setCursor(sp_dx,line); displaydraw->printf(v3);
@@ -2094,13 +2098,15 @@ void alertpopup (char *_popuptitle, char *_popuptext, uint16_t duration) {
 
 void drawscreen_popup() {
   //singlescreen version:
-  display1.fillRect(4,4,119,55,BLACK);
-  display1.drawRect(6,6,115,51,WHITE); //cheap frame
-  display1.drawRect(7,7,113,49,WHITE); //cheap frame
-  display1.setFont(popup_fontheader); display1.setCursor(popup_header_x, popup_header_y); 
-  display1.print(popuptitle);
-  display1.setFont(popup_fonttext); display1.setCursor(popup_text_x, popup_text_y); 
-  display1.print(popuptext);
+  displaydraw->fillRect(4,4,119,55,BLACK);
+  displaydraw->drawRect(6,6,115,51,WHITE); //cheap frame
+  displaydraw->drawRect(7,7,113,49,WHITE); //cheap frame
+  displaydraw->setFont(popup_fontheader);
+  displaydraw->setCursor(popup_header_x, popup_header_y); 
+  displaydraw->print(popuptitle);
+  displaydraw->setFont(popup_fonttext);
+  displaydraw->setCursor(popup_text_x, popup_text_y); 
+  displaydraw->print(popuptext);
 }
 
 void dialog_edit_int8(const char *_dialogtitle, uint8_t *_value, uint8_t _minvalue, uint8_t _maxvalue) {
@@ -2113,15 +2119,18 @@ void dialog_edit_int8(const char *_dialogtitle, uint8_t *_value, uint8_t _minval
 
 void drawscreen_dialog() {
   //singlescreen version:
-  display1.fillRect(4,4,119,55,BLACK);
-  display1.drawRect(6,6,115,51,WHITE); //cheap frame
-  display1.drawRect(7,7,113,49,WHITE); //cheap frame
-  display1.setFont(popup_fontheader); display1.setCursor(popup_header_x, popup_header_y); 
-  display1.print(diag_title);
-  display1.setFont(popup_fonttext); display1.setCursor(popup_text_x, popup_text_y); 
-  display1.printf("%d",*diag_value);
+  displaydraw->fillRect(4,4,119,55,BLACK);
+  displaydraw->drawRect(6,6,115,51,WHITE); //cheap frame
+  displaydraw->drawRect(7,7,113,49,WHITE); //cheap frame
+  displaydraw->setFont(popup_fontheader);
+  displaydraw->setCursor(popup_header_x, popup_header_y); 
+  displaydraw->print(diag_title);
+  displaydraw->setFont(popup_fonttext);
+  displaydraw->setCursor(popup_text_x, popup_text_y); 
+  displaydraw->printf("%d",*diag_value);
 }
 
+/* no used, implemented in oled1_draw
 void drawscreen_screenconfigsingle() {
   uint8_t line = baselineoffset;
     display1.setFont(menu_fontlabel); display1.setCursor(menu_x,line); display1.print("conf entry 1");
@@ -2140,10 +2149,8 @@ void drawscreen_screenconfigsingle() {
   line = baselineoffset*4+linespace*3+8;
   display1.setFont(menu_fontdata); display1.setCursor(menu_x,63); display1.print("current value");
 }
+*/
 
-
-//screendrawing start MOVE TO SCREEN.C END
-//screendrawing stop
 void oled_switchscreens() {
   uint8_t oldscreen = screen;
   
@@ -2228,15 +2235,14 @@ void oled_switchscreens() {
       } else {
         //2nd prio: handle brake-button actions
         //if (screen==screen_configmenu & brakebuttonstate!=0 & !showdialog) {
-        if (brakebuttonstate!=0) {  
+        if (brakebuttonstate!=0 & !showpopup) {  
           handle_configmenuactions();
           updatescreen = true;
         }
       }
     }
 
-  //switch to configmenu
-    //if (brakebuttonstate!=0 & throttlebuttonstate!=0 & escparsed->speed==0) {
+  //enter configmenu
     if (bothbuttonstate!=0 & escparsed->speed==0 & screen!=screen_configmenu) {
       screen = screen_configmenu;
       subscreen = 0;
@@ -2244,8 +2250,8 @@ void oled_switchscreens() {
       updatescreen = true;
       infopopup((char*)"  MENU", (char*)"release throttle!", 1000);
     }
-/*
-  //exit from configmenu via long-brake-press
+  /*
+  //exit from configmenu via long-brake-press --> we use "Exit" option in menu
     if (brakebuttonstate==2 & screen==screen_configmenu) {
     //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
       if (configchanged) { saveconfig(); }
@@ -2254,8 +2260,17 @@ void oled_switchscreens() {
       updatescreen = true;
     }
     */
+    //exit from configmenu if speed > 5km/h
+    if (screen==screen_configmenu & (abs((float)escparsed->speed/1000.0f)>5.0f)) {
+    //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
+      if (configchanged) { saveconfig(); }
+      screen = screen_drive;
+      subscreen = 0;
+      updatescreen = true;
+    }
+
   //configmenu navigaton via gas:
-  if (newdata & (screen==screen_configmenu) & !showdialog) {
+  if (newdata & (screen==screen_configmenu) & (!showdialog|!showpopup)) {
     uint8_t oldsubscreen = subscreen;
     if (bleparsed->throttle>throttlemin+5) {
       subscreen = ((bleparsed->throttle-throttlemin) / configwindowsize)+1;
@@ -2833,11 +2848,11 @@ void cm_printValue(uint8_t entryid) {
     if (showpopup) {
       drawscreen_popup();
     }
-//    #if !defined useoled2
+    #if !defined useoled2
       if (showdialog) {
         drawscreen_dialog();
       }
-  //  #endif
+    #endif
     duration_oled1draw = micros()-timestamp_oled1draw;
     timestamp_oled1transfer=micros();
     display1.display();
@@ -3011,7 +3026,9 @@ void cm_printValue(uint8_t entryid) {
       display2.setCursor(39,31);
       display2.print(FPSTR(s_locked));
     }
-
+    if (showdialog) {
+        drawscreen_dialog();
+    }
     duration_oled2draw = micros()-timestamp_oled2draw;
     timestamp_oled2transfer=micros();
     display2.display();
