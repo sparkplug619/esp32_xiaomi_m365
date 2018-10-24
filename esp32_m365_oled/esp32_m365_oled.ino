@@ -3,17 +3,12 @@
 //add fonts to repo
 
 //check:
-//alertcounters should not count on startup
 //beep on alert option...?
-//mile/km display of units
 //does it beep???
 //alertcounter on 2nd screen..?
+//no menunavigation while popup is shown
 
-//mode edit_int8 dialog to 2nd screen
-
-//auto-show ALERT Screen when stopped and alert condition set
-//OR
-//auto-popup errors for some seconds when we where driving and now stopped
+//check edit_int8 dialog on 2nd screen
 
 //LOCKED AND SPEED? BLINK OLED?
 
@@ -41,7 +36,7 @@
 #include "config.h"
 #include "strings.h"
 
-#define swversion "18.10.21"
+#define swversion "18.10.24"
 
 //usually nothing must/should be changed below
 
@@ -2080,19 +2075,23 @@ void drawscreen_data(bool headline, uint8_t lines, bool showunits,
 
 
 void infopopup (char *_popuptitle, char *_popuptext, uint16_t duration) {
-  sprintf(popuptitle, "%s", _popuptitle);
-  sprintf(popuptext, "%s", _popuptext);
-  showpopup = true;
-  popuptimestamp = millis()+duration;
+  if (!showdialog) {
+    sprintf(popuptitle, "%s", _popuptitle);
+    sprintf(popuptext, "%s", _popuptext);
+    showpopup = true;
+    popuptimestamp = millis()+duration;
+  }
 }
 
 void alertpopup (char *_popuptitle, char *_popuptext, uint16_t duration) {
-  sprintf(popuptitle, "%s", _popuptitle);
-  sprintf(popuptext, "%s", _popuptext);
-  showpopup = true;
-  popuptimestamp = millis()+duration;
-  if (conf_beeponalert) {
-    sendcommand = cmd_beep5;
+  if (!showdialog) {
+    sprintf(popuptitle, "%s", _popuptitle);
+    sprintf(popuptext, "%s", _popuptext);
+    showpopup = true;
+    popuptimestamp = millis()+duration;
+    if (conf_beeponalert) {
+      sendcommand = cmd_beep5;
+    }
   }
 }
 
@@ -2270,7 +2269,7 @@ void oled_switchscreens() {
     }
 
   //configmenu navigaton via gas:
-  if (newdata & (screen==screen_configmenu) & (!showdialog|!showpopup)) {
+  if (newdata & (screen==screen_configmenu) & !(showdialog|showpopup)) {
     uint8_t oldsubscreen = subscreen;
     if (bleparsed->throttle>throttlemin+5) {
       subscreen = ((bleparsed->throttle-throttlemin) / configwindowsize)+1;
