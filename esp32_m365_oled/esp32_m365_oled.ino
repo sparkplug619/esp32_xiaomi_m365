@@ -1,22 +1,3 @@
-//Clean readme.md
-//commit/push
-//add fonts to repo
-
-//check:
-//beep on alert option...?
-//does it beep???
-//alertcounter on 2nd screen..?
-//no menunavigation while popup is shown
-
-//check edit_int8 dialog on 2nd screen
-
-//LOCKED AND SPEED? BLINK OLED?
-
-//fix timing/crc issues
-//add trip computer
-//add navigation code
-//add flashprotetection function
-
 //******************************************
 //*************************************
 //START OF File:
@@ -36,7 +17,7 @@
 #include "config.h"
 #include "strings.h"
 
-#define swversion "18.10.24"
+#define swversion "18.10.25"
 
 //usually nothing must/should be changed below
 
@@ -62,10 +43,10 @@
 
 #if (defined useoled1 || defined useoled2)
     #include <Adafruit_GFX.h>
-    #include <Fonts/ARIALNB9pt7b.h> //Arial Narrow Bold Size 9 "33" = 15x13px
-    #include <Fonts/ARIALN9pt7b.h> //Arial Narrow Size 9 "33" = 15x13px
-    #include <Fonts/ariblk42pt7b.h> //Arial Black Size 42 "33" = 101x61px
-    #include <Fonts/ARIALNB18pt7b.h> //Arial Narrow Bold Size 18 "33" = 30x25px
+    #include <ARIALNB9pt7b.h> //Arial Narrow Bold Size 9 "33" = 15x13px
+    #include <ARIALN9pt7b.h> //Arial Narrow Size 9 "33" = 15x13px
+    #include <ariblk42pt7b.h> //Arial Black Size 42 "33" = 101x61px
+    #include <ARIALNB18pt7b.h> //Arial Narrow Bold Size 18 "33" = 30x25px
 
 
 //old stuff, clean up:

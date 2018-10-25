@@ -2,44 +2,43 @@
 Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressif ESP32:
 - Supports one or two 0.96" 128x64 SSD1306 based OLED screen(s) (SSD1351/128x128 Color OLED support to follow)
 - Display connectivity via i2c or spi (spi preffered as it's way faster)
-- ESP8266 has a bug (see issues) and currently i'm using preferences class to store settings which is not available for ESP8266 (wrapper for nvram would be needed)
 - Firmwareupdates can be done over WiFi using ArduinoOTA
+- Connects to known WiFi Networks or opens it's own SSID in AP Mode
 - optional Telnet Servers for debugging
 - Config Menu for changing scooter & esp settings
 - Supports different Screen Languages, Miles/Kilometers, Wheel Sizes, 10/12s batteries
-- use Throttle in stopped mode to Swipe through different screens
-- press Throttle and Brake at the same time while not moving to enter menu -> throttle navigates, brake selects/changes items
+- Alerts for Low Battery, ESC, BMS Temperature, Cell-Voltage Monitoring,...
 
-# Done/Details
-- WiFi Auto Connect to known SSIDs or AP-Mode & Telnet with Timeouts to auto-turnoff Telnet/WiFi
-- Firmwareupdates (of ESP Device, not the scooter) over WiFi
+This code also runs on ESP8266, but has a bug (see issues) and currently i'm using preferences class to store settings which is not available for ESP8266 (wrapper for nvram would be needed). I'm not gonna fix the esp8266 bug or develop any new features for it, so if you want u can fix the bugs, i'm happy to merge your PR.
+
+# Details
 - Telnet on Port 36523 with different Screens
 - Telnet on Port 36524 with raw byte dump from M365 Bus ("read only")
 - Telnet on Port 36525 with packet decode/dump from M365 Bus ("read only")
 - M365 Serial Receiver and Packet decoder into Array per Address
 - M365 Data Requestor obey the M365 Bus Timing, does not interfere with Xiaomi's Firmware-Flash process, but can be disabled in the menu (ESP Bus Mode Passive)
-- Data Requestor internally allows subscription (via bit-fields) to predefined groups of data (e.g. OLED display only needs Cell-Voltage Data when it's displayed).
+- Data Requestor internally allows subscription to predefined groups of data (e.g. OLED display only needs Cell-Voltage Data when it's displayed) to reduce requested data and therefore get a higher update rate on the interesting data fields.
 - Internal Timers/Counters for debugging Receiver/Requestor & Oled-Draw/Transfer Durations - see Telnet/36523 Statistics Screen
-- Display Shows LED/Light Status (to recognize accidental switched on Light @ noon while switching normal/eco mode)
-- Display Eco/Normal Mode Status (and shows Batt-Percent, so the original Status LEDs on the head unit are not needed
 - Different Screens for Drive/Stop/Charge/Error/Firmwareupgrade/Locked State/Timeout-Screen
-	- Charge Screen also shows Cell Voltages (if using single-display use throttle to switch to cellvoltage screen)
 - Alerts: Background Task ("Housekeeper") periodically requests additional data from M365 and validates against tresholds (set in configmenu), shows alert-popup and increases alert-counters
+- Popups on screen if alerts occur, alert-counters in data screens when stopped
+- Scooter can be locked/unlocked/switched off from config-menu
+- Custom Screens for
+	- Driving
+	- "Stopped" - multiple Data screens when not moving (swipe through them using throttle)
+	- "Charging" - in single-screen configuration multiple screens while charging (swipe through them using throttle)
+	- Config Menu (push Brake & Throttle at the same time to enter, select items using throttle, change/enter using brake)
+ 	- "LOCKED" screen mode when scooter has been locked
 
 # Todos
- - fix - data-requestor timing currently causes ~10% crc errors on m365 bus
- - OLED: Add Popup Messages for Events (e.g. Scooter Error, Temp, BMS CellVoltage variations > treshold, WLAN/BLE On/Off, Client Connected,...)
- - "LOCKED" screen mode when scooter has been locked
+ - fix: cmd_beep does not work
+ - fix: data-requestor timing currently causes ~10% crc errors on m365 bus
  - add display-sleeptimer - x seconds after last event (gas/brake/throttle/speed/chargerun-plug/telnet/AP-Client Connection & speed = 0)
- - advanced thief/lock protection
  - fix speed for int16 overflow in m/h -> faster than 31.7 -> overflow
+ - add trip computer
+ - add navigation code
+ - add flashprotetection function
 
-# further Ideas & Visions:
- - add Scooter-Flashing Protection (so no one can flash broken firmware to your scooter while waiting at a red traffic light
- - advanced trip computer (which keeps trip-totals/averages between 2 charge cycles or 2 times with the same available SSID (leaving/coming home)
- - MQTT Logging of Trip-Summary Data
- - Navigation Arrow Display e.g. with Komoot (https://github.com/komoot/BLEConnect)
- 
 # Telnet / Debugging Interface
  - Telemetrie Screen shows decoded known values: Batt Voltage, Current, Speed,... 
  - Statistics Screen dumps some internal counters, e.g. Packet Counters, CRC Files, Timing,...
