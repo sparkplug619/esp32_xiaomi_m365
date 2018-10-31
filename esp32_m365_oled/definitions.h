@@ -50,6 +50,9 @@
       #define OLED2_RESET GPIO_NUM_12
   #endif
 
+//define screen language
+#define LANGUAGE_EN
+//#define LANGUAGE_FR
 
 //Serial UART Setup for Debugging and M365 Connection
   #define DebugSerial Serial //Debuguart = default Serial Port/UART0
