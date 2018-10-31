@@ -32,7 +32,8 @@ Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressi
  - fix: cmd_beep does not work
  - fix: data-requestor timing currently causes ~10% crc errors on m365 bus
  - add display-sleeptimer - x seconds after last event (gas/brake/throttle/speed/chargerun-plug/telnet/AP-Client Connection & speed = 0)
- - fix speed for int16 overflow in m/h -> faster than 31.7 -> overflow
+ - fix speed for int16 overflow in km/h -> faster than 31.7 -> overflow
+ - "beep" command does not work in current version
  - add trip computer
  - add navigation code
  - add flashprotetection function
