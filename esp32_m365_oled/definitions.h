@@ -4,21 +4,23 @@
 
 #include "Arduino.h"
 
-#define swversion "18.10.31"
+#define swversion "18.11.01"
 
 //display config
-
+  
+  //#define usei2c //comment out for SPI
   #define useoled1 //comment out to disable oled functionality
   #define useoled2 //comment out if you use only one display
   #define OLED1_ROTATION 2 //0 = normal, 1= 90, 2=180, 3=270° CW
   #define OLED2_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
 
+
 //pin definitions for i2c display:
   #if (defined usei2c && defined useoled1) //one display, I2C Mode
-      //#define oled_scl GPIO_NUM_4 //working wemos fake board
-      //#define oled_sda GPIO_NUM_16 //working wemos fake board
-      #define oled_scl GPIO_NUM_32 //SCLK Pad on PCB
-      #define oled_sda GPIO_NUM_33 //MOSI Pad on PCB
+      #define oled_scl GPIO_NUM_4 //working wemos fake board
+      #define oled_sda GPIO_NUM_16 //working wemos fake board
+      //#define oled_scl GPIO_NUM_32 //SCLK Pad on PCB
+      //#define oled_sda GPIO_NUM_33 //MOSI Pad on PCB
     #define oled_reset -1
     #define oled1_address 0x3C
   #endif
@@ -52,16 +54,18 @@
 
 //define screen language
 #define LANGUAGE_EN
-//#define LANGUAGE_FR
+//#define LANGUAGE_FR //translation kindly provided by Technoo' Loggie (Telegram Handle @TechnooLoggie)
+//#define LANGUAGE_DE
 
 //Serial UART Setup for Debugging and M365 Connection
   #define DebugSerial Serial //Debuguart = default Serial Port/UART0
 
-  /* wemos test board
-  #define UART2RX GPIO_NUM_23 //Wemos board
-  #define UART2TX GPIO_NUM_5 //Wemos board
-  #define UART2RXunused GPIO_NUM_19 //TTGO Test board; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
-  */
+  // wemos test board
+  //#define UART2RX GPIO_NUM_23 //Wemos board
+  //#define UART2TX GPIO_NUM_5 //Wemos board
+  //#define UART2RXunused GPIO_NUM_19 //TTGO Test board; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+  
+   //PCB v180723
   #define UART2RX GPIO_NUM_23 //PCB v180723
   #define UART2TX GPIO_NUM_22 //PCB v180723
   #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending

@@ -133,7 +133,7 @@
 	static const char s_setvolt[] PROGMEM = "set Volt:";
 #endif //en
 
-//french translations - thanks for your help Technoo' Loggie @TechnooLoggie (@Telegram)
+//french translation kindly provided by Technoo' Loggie (Telegram Handle @TechnooLoggie)
 #ifdef LANGUAGE_FR
 	static const char headline_test[] PROGMEM = "TITRE D'ECRAN";
 	static const char headline_tripinfo[] PROGMEM = "INFO GENERALES";
@@ -307,13 +307,13 @@
 	static const char label_cycles[] PROGMEM = "Zyklen:";
 	static const char label_charges[] PROGMEM = "Ladungen:";
 	static const char label_health[] PROGMEM = "Status:";
-	static const char label_capacityshort[] PROGMEM = "Kap:";
+	static const char label_capacityshort[] PROGMEM = "Kapazit.:";
 	static const char label_totalcapacityshort[] PROGMEM = "Gesamt:";
 	static const char label_maxdiff[] PROGMEM = "Max. Diff:"; //Cell Voltage Screen, max Difference between cells
 	static const char label_bmstemp[] PROGMEM = "BMS Tmp:"; //alert screen
 	static const char label_esctemp[] PROGMEM = "ESC Tmp:"; //alert screen
 	static const char label_cellvoltage[] PROGMEM = "Zell Diff:"; //alert screen
-	static const char label_undervoltage[] PROGMEM = "Spannung tief"; //alert screen
+	static const char label_undervoltage[] PROGMEM = "Batt Leer:"; //alert screen
 	static const char label_escerrorcounter[] PROGMEM = "ESC Fehler:"; //alert screen
 
 	static const char menu_light[] PROGMEM = "Ruecklicht";
@@ -322,15 +322,15 @@
 	static const char menu_wheelsize[] PROGMEM = "Reifen";
 	static const char menu_unit[] PROGMEM = "Einheit";
 	static const char menu_battcells[] PROGMEM = "Batterie Zellen";
-	static const char menu_battalertcell[] PROGMEM = "Alerm Zellen";
+	static const char menu_battalertcell[] PROGMEM = "Alarm Zellen";
 	static const char menu_battalertlowvoltage[] PROGMEM = "Alarm Spannung";
 	static const char menu_battalerttemp[] PROGMEM = "Alarm Temp Batt";
 	static const char menu_escalerttemp[] PROGMEM = "Alarm Temp Mot";
-	static const char menu_espbusmode[] PROGMEM = "ESP Busmodus";
-	static const char menu_espwifirestart[] PROGMEM = "ESP Wifi Neustart";
-	static const char menu_m365lock[] PROGMEM = "M365 SPERREN";
-	static const char menu_m365unlock[] PROGMEM = "M365 ENTSPERREN";
-	static const char menu_m365turnoff[] PROGMEM = "M365 AUSSCHALTEN";
+	static const char menu_espbusmode[] PROGMEM = "ESP Modus";
+	static const char menu_espwifirestart[] PROGMEM = "ESP Wifi Start";
+	static const char menu_m365lock[] PROGMEM = "SPERREN";
+	static const char menu_m365unlock[] PROGMEM = "ENTSPERREN";
+	static const char menu_m365turnoff[] PROGMEM = "AUSSCHALTEN";
 	static const char menu_exit[] PROGMEM = "ENDE";
 	static const char menu_on[] PROGMEM = "AN";
 	static const char menu_off[] PROGMEM = "AUS";
@@ -382,7 +382,7 @@
 	static const char s_escfw[] PROGMEM = "ESC   FW: %x.%x.%x\r\nSN: %s\r\n";
 	static const char s_pin[] PROGMEM = "Pin: %s\r\n";
 	static const char s_miles[] PROGMEM = "Kilometer: %.2f km\r\n";
-	static const char s_battdate[] PROGMEM = "Batt-Datum: 20%02d-%02d-%02d";
+	static const char s_battdate[] PROGMEM = "Batt Datum:20%02d-%02d-%02d";
 	static const char s_locked[] PROGMEM = "GESPERRT";
 	static const char s_timeout1[] PROGMEM = "KEINE";
 	static const char s_timeout2[] PROGMEM = "DATEN";
