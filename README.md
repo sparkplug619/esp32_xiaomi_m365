@@ -64,3 +64,13 @@ It might be a idea to use e.g. 680R or 1k in series to protect the gpio, as well
 # PATCH your libraries!
  - Adafruit_SSD1306 uses 100kHz I2C Clock per default and does not support individual GPIO Pins for Clock and Data, same goes for SPI Support in that library. forked & fixed version: https://github.com/smartinick/Adafruit_SSD1306
  - arduino-esp32 core implementation of HardwareSerial and esp32-hal-uart only triggers a uart-rx event/interrupt every 112 bytes which makes it impossible to stay within the timing necersarry for the m365 one-wire-uart. (see config.h comments for more details) forked & fixed version: https://github.com/smartinick/arduino-esp32
+
+# Support, Questions,...?
+ - Telegram Group https://t.me/esp32brain4m365
+
+# Credits & Thanks to
+ - Paco Gorina for his research on the protocoll and packet structure (-> http://www.gorina.es/9BMetrics/)
+ - CamiAlfa for his research and providing informations about the contents of the packets & arrays (-> https://github.com/CamiAlfa/M365-BLE-PROTOCOL)
+ - french translation kindly provided by Technoo' Loggie (Telegram Handle @TechnooLoggie)
+
+# Licensed under Creative Commons V4 - BY NC SA
