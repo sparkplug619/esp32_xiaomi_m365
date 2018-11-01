@@ -197,10 +197,10 @@
 	static const char menu_battalerttemp[] PROGMEM = "Batt Alert Temp";
 	static const char menu_escalerttemp[] PROGMEM = "ESC Alert Temp";
 	static const char menu_espbusmode[] PROGMEM = "ESP Busmode";
-	static const char menu_espwifirestart[] PROGMEM = "ESP Redemarrage Wifi";
-	static const char menu_m365lock[] PROGMEM = "M365 VEROUILLE";
-	static const char menu_m365unlock[] PROGMEM = "M365 DEVEROUILLE";
-	static const char menu_m365turnoff[] PROGMEM = "M365 Eteindre";
+	static const char menu_espwifirestart[] PROGMEM = "Demarrage Wifi";
+	static const char menu_m365lock[] PROGMEM = "VEROUILLE";
+	static const char menu_m365unlock[] PROGMEM = "DEVEROUILLE";
+	static const char menu_m365turnoff[] PROGMEM = "Eteindre";
 	static const char menu_exit[] PROGMEM = "Sortir";
 	static const char menu_on[] PROGMEM = "ON";
 	static const char menu_off[] PROGMEM = "OFF";
