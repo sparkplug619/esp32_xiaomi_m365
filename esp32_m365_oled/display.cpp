@@ -1210,7 +1210,7 @@
                 display2.printf("T : %5.02f D : %5.03f", (float)bmsparsed->voltage/100.0f,(float)(highest-lowest)/1000.0f);
               break;
             case stopsubscreen_assets:
-                display2.print(FPSTR(headline_espstate));
+                display2.println(FPSTR(headline_espstate));
                 display2.print(FPSTR(s_firmware)); 
                 display2.println(swversion);
                 display2.print(FPSTR(s_wlan));
