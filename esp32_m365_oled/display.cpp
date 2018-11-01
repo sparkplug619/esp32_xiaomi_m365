@@ -824,7 +824,7 @@
                     drawscreen_header(FPSTR(headline_temperature),subscreen,stopsubscreens);
                     sprintf(val1buf,"%4.1f",(float)bmsparsed->temperature[0]-20.0f);
                     sprintf(val2buf,"%4.1f",(float)bmsparsed->temperature[1]-20.0f);
-                    sprintf(val3buf,(float)escparsed->frametemp2/10.0f);
+                    sprintf(val3buf,"%4.1f",(float)escparsed->frametemp2/10.0f);
                     drawscreen_data(true, 3, true,
                       FPSTR(label_batt1),&val1buf[0],FPSTR(unit_temp),
                       FPSTR(label_batt2),&val2buf[0],FPSTR(unit_temp),
