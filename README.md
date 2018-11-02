@@ -1,13 +1,14 @@
 # esp32_xiaomi_m365
 Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressif ESP32:
-- Supports one or two 0.96" 128x64 SSD1306 based OLED screen(s) (SSD1351/128x128 Color OLED support to follow)
-- Display connectivity via i2c or spi (spi preffered as it's way faster)
-- Firmwareupdates can be done over WiFi using ArduinoOTA
+- Supports one or two 0.96" 128x64 SSD1306 based OLED screen(s)
+- Display connectivity via i2c or spi (spi preffered as it's much faster)
+- Firmwareupdates (of the ESP32) can be done over WiFi using ArduinoOTA, Scooterfirmwareupdates are not blocked, can be done the usual way
 - Connects to known WiFi Networks or opens it's own SSID in AP Mode
 - optional Telnet Servers for debugging
 - Config Menu for changing scooter & esp settings
 - Supports different Screen Languages, Miles/Kilometers, Wheel Sizes, 10/12s batteries
 - Alerts for Low Battery, ESC, BMS Temperature, Cell-Voltage Monitoring,...
+- displays speeds above 32.768km/h (set for speeds from 10km/h backwards to 55,44km/h forward, backwardspeed is displayed as a positive number)
 
 # Details
 - Telnet on Port 36523 with different Screens
@@ -32,7 +33,6 @@ Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressi
  - fix: cmd_beep does not work
  - fix: data-requestor timing currently causes ~10% crc errors on m365 bus
  - add display-sleeptimer - x seconds after last event (gas/brake/throttle/speed/chargerun-plug/telnet/AP-Client Connection & speed = 0)
- - fix speed for int16 overflow in km/h -> faster than 31.7 -> overflow
  - "beep" command does not work in current version
  - add trip computer
  - add navigation code

@@ -125,7 +125,8 @@ extern HardwareSerial M365Serial;  // UART2 for M365
     uint8_t u9; //offset 0x165
     uint16_t u10; //offset 0x166-0x167
     uint16_t battpercent; //offset 0x168-0x169
-    int16_t speed; //0x16A-0x16B /1000 in km/h, negative value = backwards...
+    //int16_t speed; //0x16A-0x16B /1000 in km/h, negative value = backwards...
+    uint16_t speed; //0x16A-0x16B [fixspeed] /1000 in km/h, negative value = backwards...
     uint16_t averagespeed; //0x16C-0x16D /1000 in km/h?
     uint32_t totaldistance; //0x16e-0x171 /1000 in km
     uint16_t tripdistance; //0x172-0x173

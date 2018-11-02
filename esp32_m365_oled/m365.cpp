@@ -377,6 +377,17 @@ void m365_handlepacket() {
       case address_esc:
           packets_rec_esc++;
           memcpy((void*)& escdata[sbuf[i_offset]<<1], (void*)& sbuf[i_payloadstart], len-3);
+          //[fixspeed] -> new range: -10km/h to +55km/h, negative speed (backwards) is a positive value.
+          if (((sbuf[i_offset]<<1)<=0x16B) && (((sbuf[i_offset]<<1)+len-3)>=0x16B)) {
+              //long version for backup:
+                //int16_t *wrongspeed = (int16_t*)&escdata[0x16A];
+                //DebugSerial.printf("speedfixed (%d -> ",*wrongspeed);
+                //uint16_t realspeed = (*wrongspeed<=-10000?(uint16_t)((int32_t)*wrongspeed+(int32_t)65536):(int16_t)abs(*wrongspeed));
+                //DebugSerial.printf("%d -> ",realspeed);
+                //escparsed->speed = realspeed;
+              //short version
+                escparsed->speed = (*(int16_t*)&escdata[0x16A]<=-10000?(uint16_t)((int32_t)*(int16_t*)&escdata[0x16A]+(int32_t)65536):(int16_t)abs(*(int16_t*)&escdata[0x16A]));
+          }
         break;
       case address_ble:
           packets_rec_ble++;
@@ -493,7 +504,7 @@ void m365_receiver() { //recieves data until packet is complete
         if (sbuf[i_address]==0x20 && sbuf[i_hz]==0x65 && sbuf[i_offset]==0x00 && conf_espbusmode) {
           //senddata = true;
           m365_handlerequests();
-          DebugSerial.printf("---REQUEST-- %d\r\n",millis());
+          //DebugSerial.printf("---REQUEST-- %d\r\n",millis());
         }
         break;
     } //switch
