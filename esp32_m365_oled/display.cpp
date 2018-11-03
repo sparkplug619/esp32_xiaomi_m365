@@ -759,7 +759,7 @@
 #ifdef useoled1
   void oled1init() {
     #ifdef usei2c
-      display1.begin(SSD1306_SWITCHCAPVCC, oled1_address, false, oled_sda, oled_scl, 800000UL);
+      display1.begin(SSD1306_SWITCHCAPVCC, oled1_address, oled_doreset, oled_sda, oled_scl, 800000UL);
     #else
       display1.begin(SSD1306_SWITCHCAPVCC);
     #endif
@@ -1130,7 +1130,7 @@
 #ifdef useoled2
   void oled2init() {
     #ifdef usei2c
-      display2.begin(SSD1306_SWITCHCAPVCC, oled2_address, false,oled_sda, oled_scl, 800000UL);
+      display2.begin(SSD1306_SWITCHCAPVCC, oled2_address, oled_doreset,oled_sda, oled_scl, 800000UL);
     #else
       display2.begin(SSD1306_SWITCHCAPVCC);
     #endif

@@ -1,29 +1,96 @@
-
 #ifndef DEFINITIONS_h
 #define DEFINITIONS_h
 
 #include "Arduino.h"
+#include "secrets.h"
 
 #define swversion "18.11.02"
 
-//display config
-  
+#define ng
+
+#define M365debugtx GPIO_NUM_25
+#define dev_ttgo
+//#define dev_wemos
+//#define dev_pcb180723
+
+
+#ifdef dev_ttgo
+
+  #define usei2c //comment out for SPI
+  #define useoled1 //comment out to disable oled functionality
+  #define OLED1_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
+  #define oled_scl 15
+  #define oled_sda 4
+  #define oled_reset 16
+  #define oled_doreset true
+  #define oled1_address 0x3C
+  #ifdef ng
+    #define M365SerialGPIO GPIO_NUM_23 //Wemos board
+  #else
+    #define UART2RX GPIO_NUM_23 //PCB v180723
+    #define UART2TX GPIO_NUM_22 //PCB v180723
+    #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+  #endif
+
+#elif defined(dev_wemos)
   #define usei2c //comment out for SPI
   #define useoled1 //comment out to disable oled functionality
   #define useoled2 //comment out if you use only one display
   #define OLED1_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
   #define OLED2_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
+  #define oled_scl GPIO_NUM_4 //working wemos fake board
+  #define oled_sda GPIO_NUM_16 //working wemos fake board
+  #define oled_reset -1
+  #define oled_doreset false
+  #define oled1_address 0x3C
+  #define oled2_address 0x3D
+  #ifdef ng
+    #define M365SerialGPIO GPIO_NUM_25 //Wemos board
+  #else
+    #define UART2RX GPIO_NUM_23 //PCB v180723
+    #define UART2TX GPIO_NUM_22 //PCB v180723
+    #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+  #endif
+#elif defined(dev_pcb180723)
+  //#define usei2c //comment out for SPI
+  #define useoled1 //comment out to disable oled functionality
+  #define useoled2 //comment out if you use only one display
+  #define OLED1_ROTATION 2 //0 = normal, 1= 90, 2=180, 3=270° CW
+  #define OLED2_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
+  #define OLED_MISO   GPIO_NUM_19
+  #define OLED_MOSI   GPIO_NUM_33
+  #define OLED_CLK    GPIO_NUM_32
+  #define OLED_DC     GPIO_NUM_25
+  #define OLED1_CS    GPIO_NUM_26
+  #define OLED1_RESET GPIO_NUM_27
+  #define OLED2_CS    GPIO_NUM_14
+  #define OLED2_RESET GPIO_NUM_12
+  #define M365SerialGPIO GPIO_NUM_25 //Wemos board
 
+#else
 
+//display config
+ 
+  #define usei2c //comment out for SPI
+  #define useoled1 //comment out to disable oled functionality
+  //#define useoled2 //comment out if you use only one display
+  #define OLED1_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
+  #define OLED2_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
 
 
 //pin definitions for i2c display:
   #if (defined usei2c && defined useoled1) //one display, I2C Mode
-      #define oled_scl GPIO_NUM_4 //working wemos fake board
-      #define oled_sda GPIO_NUM_16 //working wemos fake board
+      //#define oled_scl GPIO_NUM_4 //working wemos fake board
+      //#define oled_sda GPIO_NUM_16 //working wemos fake board
       //#define oled_scl GPIO_NUM_32 //SCLK Pad on PCB
       //#define oled_sda GPIO_NUM_33 //MOSI Pad on PCB
-    #define oled_reset -1
+    //#define oled_reset -1
+
+    //ttgo dev board
+    #define oled_scl 15
+    #define oled_sda 4
+    #define oled_reset 16
+
     #define oled1_address 0x3C
   #endif
 
@@ -54,6 +121,16 @@
       #define OLED2_RESET GPIO_NUM_12
   #endif
 
+  #ifdef ng
+    #define M365SerialGPIO GPIO_NUM_23 //Wemos board
+  #else
+    #define UART2RX GPIO_NUM_23 //PCB v180723
+    #define UART2TX GPIO_NUM_22 //PCB v180723
+    #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+  #endif
+#endif //board define groups
+
+
 //define screen language
 #define LANGUAGE_EN
 //#define LANGUAGE_FR //translation kindly provided by Technoo' Loggie (Telegram Handle @TechnooLoggie)
@@ -61,20 +138,17 @@
 
 //Serial UART Setup for Debugging and M365 Connection
   #define DebugSerial Serial //Debuguart = default Serial Port/UART0
-
+  #define M365UARTINDEX 2
   // wemos test board
-  #define UART2RX GPIO_NUM_23 //Wemos board
-  #define UART2TX GPIO_NUM_5 //Wemos board
-  #define UART2RXunused GPIO_NUM_19 //TTGO Test board; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
   
-   //PCB v180723
-  //#define UART2RX GPIO_NUM_23 //PCB v180723
-  //#define UART2TX GPIO_NUM_22 //PCB v180723
-  //#define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+  #ifdef ng
+    #define M365SerialInit M365Serial.begin(115200,SERIAL_8N1, M365SerialGPIO, -1);
+    #define M365SerialRX switch2RX();
+    #define M365SerialTX switch2TX();
+  #else
+  #endif  
 
-  #define M365SerialFull M365Serial.begin(115200,SERIAL_8N1, UART2RX, UART2TX);
   //#define Serial1RX M365Serial.begin(115200,SERIAL_8N1, UART2RX, -1)
-  #define M365SerialTX M365Serial.begin(115200,SERIAL_8N1, UART2RXunused, UART2TX);
 
 //M365 - serial connection - regarding a patch in the sdk and general explanations:
   /* ATTENZIONE - the Arduino Serial Library uses HardwareSerial from the arduino-esp32 core which uses "esp32-hal-uart.cpp" driver from esp-idf which runs on RTOS
@@ -130,23 +204,8 @@
 
 
 
-//Wifi - CHANGE IT TO YOUR OWN SETTINGS!!!
-    #define maxssids 1
-    #define ssid1 "m365dev"
-    #define password1 "h5fj8bvothrfd65b4"
-    #define ssid2 "..."
-    #define password2 "..."
-    #define ssid3 "..."
-    #define password3 "..."
-
-//SSID/Pass for Access-Point Mode - CHANGE IT TO YOUR OWN SEQUENCE!!!
-    #define ap_ssid "m365oled"
-    #define ap_password "365"
     extern const char *apssid;
     extern const char *appassword;
-
-//Over The Air Firmwareupdates - password - CHANGE IT TO YOUR OWN SEQUENCE!!!
-    #define OTApwd "h5fj8ovbthrfd65b4"
 
 //#define staticip //use static IP in Client Mode, Comment out for DHCP
     #ifdef staticip //static IP for Client Mode, in AP Mode default is 192.168.4.1/24

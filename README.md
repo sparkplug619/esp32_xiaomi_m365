@@ -61,9 +61,36 @@ It might be a idea to use e.g. 680R or 1k in series to protect the gpio, as well
  - 1nF or 470pF C from EN towards GND and 12-18k R from EN towards 3.3V are missing (sad copy and paste error)
  - the SOT23 Diode housing might be wrong - depending on your Diode (BAS70xx versions) -> the Diode-Package can be rotated 120° CCW to fix that
 
-# PATCH your libraries!
+# Before Compiling
+
+## PATCH your libraries!
  - Adafruit_SSD1306 uses 100kHz I2C Clock per default and does not support individual GPIO Pins for Clock and Data, same goes for SPI Support in that library. forked & fixed version: https://github.com/smartinick/Adafruit_SSD1306
  - arduino-esp32 core implementation of HardwareSerial and esp32-hal-uart only triggers a uart-rx event/interrupt every 112 bytes which makes it impossible to stay within the timing necersarry for the m365 one-wire-uart. (see config.h comments for more details) forked & fixed version: https://github.com/smartinick/arduino-esp32
+
+## setup secrets
+Make a secrets.h file in the same directory as the .ino and other files are, copy this template and adopt the ssids/passwords:
+```
+#ifndef SECRETS_h
+#define SECRETS_h
+
+//Wifi - CHANGE IT TO YOUR OWN SETTINGS!!!
+    #define maxssids 1
+    #define ssid1 "yourssid"
+    #define password1 "yourpassphrase"
+    #define ssid2 "..."
+    #define password2 "..."
+    #define ssid3 "..."
+    #define password3 "..."
+
+//SSID/Pass for Access-Point Mode - CHANGE IT TO YOUR OWN SEQUENCE!!!
+    #define ap_ssid "m365oled"
+    #define ap_password "appassword"
+
+//Over The Air Firmwareupdates - password - CHANGE IT TO YOUR OWN SEQUENCE!!!
+    #define OTApwd "yourotapassword"
+
+#endif
+```
 
 # Support, Questions,...?
  - Telegram Group https://t.me/esp32brain4m365
