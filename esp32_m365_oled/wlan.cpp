@@ -200,11 +200,6 @@ void handle_wlan() {
         } //if (apnumclientsconnected==0)
       break;
     case wlanturnoff:
-        #ifdef usemqtt
-          if (client.connected) {
-            client.disconnect();
-          }        
-        #endif
         #ifdef usetelnetserver
           if (telnetclient) telnetclient.stop();
         #endif

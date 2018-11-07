@@ -108,8 +108,9 @@
   #define screen_timeout 3
   #define screen_charging 4
   #define screen_configmenu 5
-  #define screen_alarm 6
+  #define screen_alarm 6 //error counters & state
   #define screen_locked 7
+  #define screen_alert 8 //alert screen when scooter is locked and moved
 
   extern uint8_t subscreen;
   extern uint8_t windowsubpos;
@@ -256,14 +257,14 @@ void handle_configmenuactions(void);
 void oled_switchscreens(void);
 void cm_printKey(uint8_t entryid);
 void cm_printValue(uint8_t entryid);
-#ifdef useoled1
+//#ifdef useoled1
   void handle_oled(void);
-  void oled1init(void);
+  void oled1_init(void);
   void oled1_update(void);
-#endif
+//#endif
 
 #ifdef useoled2
-  void oled2init(void);
+  void oled2_init(void);
   void oled2_update(void);
 #endif
 

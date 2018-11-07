@@ -4,9 +4,11 @@
 #include "definitions.h"
 #include "strings.h"
 #include "wlan.h"
+#include <WiFi.h>
+#include <WiFiUdp.h>
 
 #ifdef usetelnetserver
-  extern WiFiServer telnetserver
+  extern WiFiServer telnetserver;
   extern WiFiClient telnetclient;
   #ifdef usepacketserver
     extern WiFiServer packetserver;
@@ -43,6 +45,21 @@
   #define ts_x1_raw 5
   extern uint8_t telnetscreen;
   extern uint8_t telnetscreenold;
+
+  //ANSI
+  extern String ansiPRE;
+  extern String ansiHOME;
+  extern String ansiESC;
+  extern String ansiCLC;
+  extern String ansiEND;
+  extern String ansiBOLD;
+  extern String ansiRED;
+  extern String ansiGRN;
+  extern String ansiBLU;
+  extern String ansiREDF;
+  extern String ansiGRNF;
+  extern String ansiBLUF;
+  extern String BELL;
 
 void telnet_refreshscreen(void);
 void handle_telnet(void);

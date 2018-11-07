@@ -5,6 +5,12 @@
 #include "config.h"
 #include "strings.h"
 #include "display.h"
+#ifdef usetelnetserver
+  #include "telnet.h"
+#endif
+#ifdef usengcode
+  #include "ngcode.h"
+#endif
 
 #include <HardwareSerial.h>
 
@@ -96,7 +102,7 @@ extern HardwareSerial M365Serial;  // UART2 for M365
     uint8_t mode; //offset 0x00 mode: 0-stall, 1-drive, 2-eco stall, 3-eco drive
     uint8_t battleds;  //offset 0x01 battery status 0 - min, 7(or 8...) - max
     uint8_t light;  //offset 0x02 0= off, 0x64 = on
-    uint8_t beepaction;  //offset 0x03 "beepaction" ?
+    uint8_t beepaction;  //offset 0x03 "beep request from esc: 1:short beep (ble connected), 2 long beep cruise control en/disabled, 3 short beep battery fully charged
     //uint8_t u1[508];
   }__attribute__((packed))   x1struct;
 
@@ -120,8 +126,9 @@ extern HardwareSerial M365Serial;  // UART2 for M365
     uint16_t taillight; //offset 0xfa-0xfb, off 0, on 2
     uint16_t u7[50]; //offset  0xfc-0x15f
     uint16_t error; //offset 0x160-0x161
-    uint16_t u8[1]; //offset 0x162-0x163
-    uint8_t lockstate; //offset 0x164
+    uint8_t alert; //offset 0x162, alarmstate 0x00=off, 0x09 = on
+    uint8_t u8[1]; //offset 0x163
+    uint8_t lockstate; //offset 0x164, 0 = unlocked, 2 = locked, 6 = locked & alert
     uint8_t u9; //offset 0x165
     uint16_t u10; //offset 0x166-0x167
     uint16_t battpercent; //offset 0x168-0x169

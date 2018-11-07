@@ -1,4 +1,11 @@
 #include "m365.h"
+#include "definitions.h"
+#ifdef usengcode
+  #include "ngcode.h"
+#endif
+
+
+
 
 HardwareSerial M365Serial(M365UARTINDEX);  // UART2 for M365
 
@@ -79,11 +86,13 @@ uint8_t m365receiverstateold = 0;
   bool alert_bmstemp = false;
   bool alert_esctemp = false;
   bool alert_undervoltage = false;
+  bool alert_lockedalarm = false;
   uint16_t alertcounter_escerror = 0;
   uint16_t alertcounter_cellvoltage = 0;
   uint16_t alertcounter_bmstemp = 0;
   uint16_t alertcounter_esctemp = 0;
   uint16_t alertcounter_undervoltage = 0;
+  uint16_t alertcounter_lockedalarm = 0;
 
 //scooter-config stuff
   float wheelfact = 0;
@@ -91,36 +100,6 @@ uint8_t m365receiverstateold = 0;
 //misc
   uint16_t capacitychargestart = 0;
 
-//single gpio pin uart test
-
-#include "soc/uart_reg.h"
-#include "soc/uart_struct.h"
-
-#define UART_RXD_IDX(u)     ((u==0)?U0RXD_IN_IDX:(          (u==1)?U1RXD_IN_IDX:(         (u==2)?U2RXD_IN_IDX:0)))
-#define UART_TXD_IDX(u)     ((u==0)?U0TXD_OUT_IDX:(         (u==1)?U1TXD_OUT_IDX:(        (u==2)?U2TXD_OUT_IDX:0)))
-
-
-void switch2RX() {
-    digitalWrite(M365debugtx,LOW);
-//detach TX
-    pinMatrixOutDetach(UART_TXD_IDX(M365UARTINDEX), false, false);
-//attach RX
-    pinMode(M365SerialGPIO, INPUT);
-    pinMatrixInAttach(M365SerialGPIO, UART_RXD_IDX(M365UARTINDEX), false); //last param false = not inverted
-}
-
-void switch2TX() {
-//detach RX
-    pinMatrixInDetach(UART_RXD_IDX(M365UARTINDEX), false, false);
-//attach TX
-    pinMode(M365SerialGPIO, OUTPUT);
-    pinMatrixOutAttach(M365SerialGPIO, UART_TXD_IDX(M365UARTINDEX), false, false); //2nd last param false = not inverted
-    digitalWrite(M365debugtx,HIGH);
-}
-
-
-
-//END TEST
 
 void reset_statistics() {
   packets_rec=0;
@@ -154,7 +133,7 @@ uint8_t request_bms[requestbmslen] = { 0x55,0xAA,0x03,0x22,0x01,0x10,0x3A,0xB7,0
 uint8_t request_esc[requestesclen] = { 0x55,0xAA,0x06,0x20,0x61,0x10,0xAC,0x02,0x28,0x27,0xB7,0xFF};
 uint8_t requestindex = 0;
 uint8_t requests[requestmax][3]= {
-        { address_esc, 0xB0, 0x20}, //error, lockstate, battpercent,speed,averagespeed,totaldistance,tripdistance,ontime2,frametemp2
+        { address_esc, 0xB0, 0x20}, //error, alarm, lockstate, battpercent,speed,averagespeed,totaldistance,tripdistance,ontime2,frametemp2
         { address_esc, 0x25, 0x02}, //remaining distance
         { address_esc, 0x3A, 0x0A}, //ontime, triptime, frametemp1
         { address_bms, 0x31, 0x0A}, //remaining cap & percent, current, voltage, temperature
@@ -185,7 +164,6 @@ uint8_t requests[requestmax][3]= {
 
 void start_m365() {
   subscribedrequests=rqsarray[0];
-  pinMode(M365debugtx, OUTPUT);
   M365SerialInit
   m365receiverstate = m365receiverready;
   m365packetstate=m365packetidle;
@@ -225,8 +203,8 @@ void m365_updatestats() {
         chargewindowsize = (uint8_t)((throttlemax-throttlemin)/chargesubscreens);
         configwindowsize = (uint8_t)((throttlemax-throttlemin)/(configsubscreens-1));
       }
-
     }
+
   //Trip
     if (speed_min>escparsed->speed) { speed_min = escparsed->speed; }
     if (speed_max<escparsed->speed) { speed_max = escparsed->speed; }
@@ -242,7 +220,21 @@ void m365_updatestats() {
     if (tb2_max<bmsparsed->temperature[1]) { tb2_max = bmsparsed->temperature[1]; }
     if (te_min>escparsed->frametemp2 | te_min==0) { te_min = escparsed->frametemp2; }
     if (te_max<escparsed->frametemp2) { te_max = escparsed->frametemp2; }
-  m365_updatebattstats();
+  //battery cell statistics
+    m365_updatebattstats();
+  //alert when in locked mode:
+    if (escparsed->alert!=0) {
+      if (!alert_lockedalarm) {
+        alertcounter_lockedalarm++;
+        //decide if we use screen_alert oralertpopup here...
+        alert_lockedalarm = true;
+        alertpopup((char*)"ALARM", (char*)"SCOOTER LOCKED!", popupalertduration);
+      }
+    } else {
+      alert_lockedalarm = false;  
+    }
+
+
 } //m365_updatestats
 
 void m365_sendesccommand(uint8_t cvalue, uint8_t cparam1, uint8_t cparam2) {
@@ -258,7 +250,6 @@ void m365_sendesccommand(uint8_t cvalue, uint8_t cparam1, uint8_t cparam2) {
   esccommand[esccommand_crc2]=(uint8_t)((crccalc&0xff00)>>8);
   switch2TX;
   M365Serial.write((unsigned char*)&esccommand,esccommandlen);
-  M365Serial.flush();
   switch2RX;
   esccommands_sent++;
 } //m365_sendesccommand
@@ -275,7 +266,6 @@ void m365_sendx1command(uint8_t beepnum) {
   x1command[x1command_crc2]=(uint8_t)((crccalc&0xff00)>>8);
   switch2TX;
   M365Serial.write((unsigned char*)&x1command,x1commandlen);
-  M365Serial.flush();
   switch2RX;
   x1commands_sent++;
 } //m365_sendesccommand
@@ -293,7 +283,6 @@ void m365_sendrequest(uint8_t radr, uint8_t roffset, uint8_t rlen) {
     request_bms[bms_request_crc2]=(uint8_t)((crccalc&0xff00)>>8);
     switch2TX;
     M365Serial.write((unsigned char*)&request_bms,requestbmslen);
-    M365Serial.flush();
     switch2RX;
     requests_sent_bms++;
   } //if address address_bms
@@ -311,7 +300,6 @@ void m365_sendrequest(uint8_t radr, uint8_t roffset, uint8_t rlen) {
     request_esc[esc_request_crc2]=(uint8_t)((crccalc&0xff00)>>8);
     switch2TX;
     M365Serial.write((unsigned char*)&request_esc,requestesclen);
-    M365Serial.flush();
     switch2RX;
     requests_sent_esc++;
   } //if address address_esc
@@ -577,12 +565,13 @@ void handle_housekeeper() {
     case hkrequesting: //waiting until we received data...
     break;
   case hkevaluating: //evaluate alarms,... rearm timeout
+    //alarm in locked-mode is checked on every data frame -> see m365_updatestats
     //check error register
       if (escparsed->error!=0) {
         if (!alert_escerror) {
           alertcounter_escerror++;
           alert_escerror = true;
-          sprintf(tmp1,"%d (eror screen!)",escparsed->error);
+          sprintf(tmp1,"%d (error screen!)",escparsed->error);
           alertpopup((char*)"ESC ERROR", tmp1, popupalertduration);
 
         }

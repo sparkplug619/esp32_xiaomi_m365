@@ -52,8 +52,9 @@
 	static const char label_bmstemp[] PROGMEM = "BMS Tmp:"; //alert screen
 	static const char label_esctemp[] PROGMEM = "ESC Tmp:"; //alert screen
 	static const char label_cellvoltage[] PROGMEM = "Cell Diff:"; //alert screen
-	static const char label_undervoltage[] PROGMEM = "Low Voltage"; //alert screen
+	static const char label_undervoltage[] PROGMEM = "Low Volt:"; //alert screen
 	static const char label_escerrorcounter[] PROGMEM = "ESC Err:"; //alert screen
+	static const char label_alertcounter[] PROGMEM = "Lock-Alert:"; //alert screen
 
 	static const char menu_light[] PROGMEM = "Tail Light";
 	static const char menu_cruise[] PROGMEM = "Cruise Control";
@@ -123,6 +124,7 @@
 	static const char s_miles[] PROGMEM = "Tot. Dist.: %.2f km\r\n";
 	static const char s_battdate[] PROGMEM = "Batt-Date: 20%02d-%02d-%02d";
 	static const char s_locked[] PROGMEM = "LOCKED";
+	static const char s_alert[] PROGMEM = "ALERT";
 	static const char s_timeout1[] PROGMEM = "NO";
 	static const char s_timeout2[] PROGMEM = "DATA";
 	static const char s_timeout3[] PROGMEM = "TIMEOUT";
@@ -185,6 +187,7 @@
 	static const char label_cellvoltage[] PROGMEM = "Cell Diff:"; //alert screen
 	static const char label_undervoltage[] PROGMEM = "Tension Basse"; //alert screen
 	static const char label_escerrorcounter[] PROGMEM = "ESC Err:"; //alert screen
+	static const char label_alertcounter[] PROGMEM = "Lock-Alert:"; //alert screen TODO TRANSLATE
 
 	static const char menu_light[] PROGMEM = "Lumiere avant";
 	static const char menu_cruise[] PROGMEM = "Regulat vitesse";
@@ -254,6 +257,7 @@
 	static const char s_miles[] PROGMEM = "Tot. Dist.: %.2f km\r\n";
 	static const char s_battdate[] PROGMEM = "Batt-Date: 20%02d-%02d-%02d";
 	static const char s_locked[] PROGMEM = "VEROUILLE";
+	static const char s_alert[] PROGMEM = "ALARM"; //TODO TRANSLATE
 	static const char s_timeout1[] PROGMEM = "NO";
 	static const char s_timeout2[] PROGMEM = "DONNEES";
 	static const char s_timeout3[] PROGMEM = "TIMEOUT";
@@ -315,6 +319,7 @@
 	static const char label_cellvoltage[] PROGMEM = "Zell Diff:"; //alert screen
 	static const char label_undervoltage[] PROGMEM = "Batt Leer:"; //alert screen
 	static const char label_escerrorcounter[] PROGMEM = "ESC Fehler:"; //alert screen
+	static const char label_alertcounter[] PROGMEM = "Alarms:"; //alert screen
 
 	static const char menu_light[] PROGMEM = "Ruecklicht";
 	static const char menu_cruise[] PROGMEM = "Tempomat";
@@ -384,6 +389,7 @@
 	static const char s_miles[] PROGMEM = "Kilometer: %.2f km\r\n";
 	static const char s_battdate[] PROGMEM = "Batt Datum:20%02d-%02d-%02d";
 	static const char s_locked[] PROGMEM = "GESPERRT";
+	static const char s_alert[] PROGMEM = "ALARM";
 	static const char s_timeout1[] PROGMEM = "KEINE";
 	static const char s_timeout2[] PROGMEM = "DATEN";
 	static const char s_timeout3[] PROGMEM = "TIMEOUT";

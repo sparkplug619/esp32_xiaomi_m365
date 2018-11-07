@@ -17,11 +17,15 @@
  */
 
 #include "definitions.h"
+#include "display.h"
 #include "config.h"
 #include "strings.h"
 #include "wlan.h"
 #include "m365.h"
-#include "display.h"
+//#include "secrets.h"
+#ifdef usengcode
+  #include "ngcode.h"
+#endif
 
 #ifdef usetelnetserver
   #include "telnet.h"
@@ -103,16 +107,18 @@
 #endif
 
 
-
 void setup() {
+  #ifdef usengcode
+    init_ng;
+  #endif
   start_m365();
 #ifdef useoled1
-  oled1init();
+  oled1_init();
   drawscreen_startscreen();
   display1.display();
 #endif
 #ifdef useoled2
-  oled2init();
+  oled2_init();
   display1.setRotation(0);
   drawscreen_startscreen();
   display1.setRotation(OLED1_ROTATION); //upside down
@@ -144,20 +150,14 @@ void setup() {
   sprintf(mac,"%02X%02X%02X%02X%02X%02X",(uint8_t)(cit),(uint8_t)(cit>>8),(uint8_t)(cit>>16),(uint8_t)(cit>>24),(uint8_t)(cit>>32),(uint8_t)(cit>>40));
   ArduinoOTA.onStart([]() {
     DebugSerial.println("OTA Start");
-    #ifdef usemqtt
-        if (client.connected()) {
-          sprintf(tmp1, "n/%d/OTAStart", mqtt_clientID);
-          client.publish(tmp1, "OTA Starting");
-        }
-    #endif
     #if !defined useoled2
-        oled1init();
+        oled1_init();
         display1.clearDisplay();
         display1.display();
     #endif
     #ifdef useoled2
-        oled1init();
-        oled2init();
+        oled1_init();
+        oled2_init();
         display1.clearDisplay();
         drawscreen_startscreen();
         display1.display();
@@ -167,12 +167,6 @@ void setup() {
   });
   ArduinoOTA.onEnd([]() {
     DebugSerial.println("\nOTA End");
-    #ifdef usemqtt
-        if (client.connected()) {
-          sprintf(tmp1, "n/%d/OTAEND", mqtt_clientID);
-          client.publish(tmp1, "OTA Done");
-        }
-    #endif
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -220,13 +214,6 @@ void setup() {
     else if (error == OTA_END_ERROR) sprintf(tmp1,"%s","End Failed");
     sprintf(tmp2, "OTA Error [%u]: %s", error, tmp1);
     DebugSerial.println(tmp2);
-    #ifdef usemqtt
-      if (client.connected()) {
-        sprintf(tmp1, "n/%d/OTAError", mqtt_clientID);
-        client.publish(tmp1, tmp2);
-        yield(); //give wifi/mqtt a chance to send before reboot
-      }
-    #endif
     #ifdef useoled1
       display1.clearDisplay();
       display1.setTextSize(1);
@@ -264,9 +251,6 @@ void loop() {
   ArduinoOTA.handle();
   #ifdef usestatusled
     handle_led();
-  #endif
-  #ifdef usemqtt
-    client.loop();
   #endif
   #ifdef debug_dump_states
     print_states();

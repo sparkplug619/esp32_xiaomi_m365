@@ -48,14 +48,31 @@ use the letters
  - r to reset statistics & zero m365 data arrays
 
 # Wiring
+## Connector in M365 Headunit
 M365 has a Serial One Wire Bus between BLE Module and ESC which consists of 4 wires, the connection as seen on the BLE Module:
 - Ground  (Black, "G")
 - One Wire Serial Connection (Yellow, "T", 115200bps, 8n1)
 - VBatt (Green, "P", always available)
 - 5V (Red, "5", only when scooter is turned on)
 
-ESP32 needs a Vcc of 3.3V, while at the same time the GPIO Pins are 5V save, so you can wire the 5V to a Vreg for 3.3v which feed the ESP, while the Serial Connection can be wired to RX/TX Pins.
-It might be a idea to use e.g. 680R or 1k in series to protect the gpio, as well as add a diode from rx in series with a ~100-200R towards TX
+## ESP32 Powering
+ESP32 needs a Vcc of 3.3V, so you can wire the 5V from M365 to a Vreg for 3.3v which powers the ESP. DO NOT POWER THE ESP32 WITH 5V!
+
+## M365 Serial Data Bus Connection
+
+Other then the VCC which can not be 5V, the GPIO Pins can be connected to 5V signals. the logic-high from 3.3v powered ESP32 is still enough for detection as high-level for a 5v device.
+So the Serial RX & TX Pins can be directly connected, but to ensure communication on the one-wire uart bus we need 2, to be on the safe side 3 parts:
+ - 680R or 1k between RX and M365 Data Bus
+ - And a Diode from M365 Data Bus in series with a ~100-200R towards TX Pin of  ESP32
+
+## ESP32 Pin assignment
+
+The ESP32 has a io-switchmatrix, so (nearly) any hardwareunit can be mapped to nearly any pin.
+Just be sure to not to use:
+ - GPIO_NUM_34 – GPIO_NUM_39 are only GPI - Input, NO OUTPUT, No Pullup or Pulldown!
+ - GPIO 6-11 are used by flash - not usable
+ - GPIO 0 is for boot/flashing with pullup
+
 
 # PCB Bugs v180723
  - 1nF or 470pF C from EN towards GND and 12-18k R from EN towards 3.3V are missing (sad copy and paste error)
@@ -67,8 +84,11 @@ It might be a idea to use e.g. 680R or 1k in series to protect the gpio, as well
  - Adafruit_SSD1306 uses 100kHz I2C Clock per default and does not support individual GPIO Pins for Clock and Data, same goes for SPI Support in that library. forked & fixed version: https://github.com/smartinick/Adafruit_SSD1306
  - arduino-esp32 core implementation of HardwareSerial and esp32-hal-uart only triggers a uart-rx event/interrupt every 112 bytes which makes it impossible to stay within the timing necersarry for the m365 one-wire-uart. (see config.h comments for more details) forked & fixed version: https://github.com/smartinick/arduino-esp32
 
-## setup secrets
-Make a secrets.h file in the same directory as the .ino and other files are, copy this template and adopt the ssids/passwords:
+## setup individual settings
+2 files are not included in the repository on purpose: in those files your ssid/passwords and your pinout for  your board are stored. that way you can update the code from the repo and your custom settings are not changed
+
+### secrets.h
+- Make a secrets.h file in the same directory as the .ino and other files are, copy this template and adopt the ssids/passwords:
 ```
 #ifndef SECRETS_h
 #define SECRETS_h
@@ -91,6 +111,64 @@ Make a secrets.h file in the same directory as the .ino and other files are, cop
 
 #endif
 ```
+- save the file ;)
+## setup board.h
+- Make a boards.h file in the same directory as the .ino and other files are, copy this template and adopt the ssids/passwords:
+```
+#ifndef boards_h
+#define boards_h
+
+//display config
+ 
+  #define usei2c //comment out for SPI
+  #define useoled1 //comment out to disable oled functionality
+  #define useoled2 //comment out if you use only one display
+  #define OLED1_ROTATION 2 //0 = normal, 1= 90, 2=180, 3=270° CW
+  #define OLED2_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
+
+//pin definitions for i2c display:
+  #if (defined usei2c && defined useoled1) //one display, I2C Mode
+    #define oled_scl GPIO_NUM_32 //SCLK Pad on PCB
+    #define oled_sda GPIO_NUM_33 //MOSI Pad on PCB
+    #define oled_reset -1
+    #define oled1_address 0x3C
+  #endif
+
+  #if (defined usei2c && defined useoled2) //2nd display, i2c mode
+      #define oled2_address 0x3D
+  #endif
+
+//pin definitions for spi display:
+  #if (!defined usei2c && defined useoled1 && defined ESP32) //one display, ESP32/Hardware SPI Mode
+      #define OLED_MISO   GPIO_NUM_19
+      //this is just a unused GPIO pin - SPI Lib needs a MISO Pin, display off course not :D
+      #define OLED_MOSI   GPIO_NUM_33
+      #define OLED_CLK    GPIO_NUM_32
+      #define OLED_DC     GPIO_NUM_25
+      //OLED1 on OLED1 Connector:
+        #define OLED1_CS    GPIO_NUM_26
+        #define OLED1_RESET GPIO_NUM_27
+      //OLED1 on OLED2 Connector:
+        //#define OLED1_CS    GPIO_NUM_14
+        //#define OLED1_RESET GPIO_NUM_12
+        //#define OLED1_ROTATION 0
+  #endif
+
+  #if (!defined usei2c && defined useoled2 && defined ESP32) //2nd display, ESP32/Hardware SPI Mode
+      #define OLED2_CS    GPIO_NUM_14
+      #define OLED2_RESET GPIO_NUM_12
+  #endif
+
+  //definitions for uart with 2 gpio pins
+    #define UART2RX GPIO_NUM_23 //PCB v180723
+    #define UART2TX GPIO_NUM_22 //PCB v180723
+    #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+
+#endif
+```
+- comment/uncomment & adopt the definitions in that file to match your setup.
+- after creating the file, you have one step to complete (and this step has to be done after each "git pull":  then open definitions.h and comment out all "#define dev_*" lines in the beginning (put // in front of the line). then uncomment,(remove the //) the line "#define dev_customboard"
+- save the 2 files ;)
 
 # Support, Questions,...?
  - Telegram Group https://t.me/esp32brain4m365

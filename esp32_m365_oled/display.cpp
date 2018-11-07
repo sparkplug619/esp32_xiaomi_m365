@@ -1,4 +1,5 @@
 #include "display.h"
+#include "strings.h"
 
 #if (defined usei2c && defined useoled1)
     Adafruit_SSD1306 display1(oled_reset);
@@ -87,7 +88,11 @@
     display1.setTextColor(WHITE);
     display1.clearDisplay();
     display1.setCursor(35,5);
-    display1.print("ESP32 OLED");
+    #ifdef usengcode
+      display1.print("ESP32 OLED NG");
+    #else
+      display1.print("ESP32 OLED");
+    #endif
     //display1.setCursor(64,20);
     //display1.print("for");
     display1.setCursor(35,25);
@@ -381,9 +386,13 @@
         updatescreen=true; 
       }
 
-    //2nd prio - locked?
+    //2nd prio - locked or alert in lockmode?
     if (escparsed->lockstate==0x02 & screen!=screen_configmenu) {
       screen=screen_locked;
+    }
+
+    if (escparsed->lockstate==0x09 & screen!=screen_configmenu) {
+      screen=screen_alert;
     }
     
     //"button" handling
@@ -757,7 +766,7 @@
 #endif //useoled1 or useoled2
 
 #ifdef useoled1
-  void oled1init() {
+  void oled1_init() {
     #ifdef usei2c
       display1.begin(SSD1306_SWITCHCAPVCC, oled1_address, oled_doreset, oled_sda, oled_scl, 800000UL);
     #else
@@ -776,7 +785,7 @@
     timestamp_oled1draw=micros();
 
     if (oledreinit) {
-      oled1init();
+      oled1_init();
       #if !defined useoled2
         oledreinit=false;
       #endif
@@ -1077,41 +1086,39 @@
       display1.setCursor(39,31);
       display1.print(FPSTR(s_locked));
     }
+    if (screen==screen_alert) {  
+      display1.setFont();
+      display1.setCursor(39,31);
+      display1.print(FPSTR(s_alert));
+    }
 
-      if ((screen==screen_stop)&(subscreen==0)) {
-        //Lockstate
-          //if (escparsed->lockstate==0x02) { 
-          //  display1.setFont();
-          //  display1.setCursor(88,line1);
-          //  display1.print(FPSTR(s_locked));
-          //} else {
-        
-            //LIGHT ON/OFF
-              if (x1parsed->light==0x64) { 
-                display1.setFont();
-                display1.setCursor(120,line1);
-                display1.print("L");
-              }
-            //NORMAL/ECO MODE
-              display1.setFont();
-              display1.setCursor(112,line1);
-              if (x1parsed->mode<2) { 
-                display1.print("N"); //normal mode
-              } else {
-                display1.print("E"); //eco mode
-              }
-            //WLAN STATUS
-              display1.setFont();
-              display1.setCursor(96,line1);
-              if (wlanstate==wlansearching) { display1.print(FPSTR(s_wlansearchshort)); }
-              if (wlanstate==wlanconnected) { display1.print(FPSTR(s_wlanconshort)); }
-              if (wlanstate==wlanap) { display1.print(FPSTR(s_wlanapshort)); }
-            }
-          //} //else lockstate
+    if ((screen==screen_stop)&(subscreen==0)) {
+      //LIGHT ON/OFF
+        if (x1parsed->light==0x64) { 
+          display1.setFont();
+          display1.setCursor(120,line1);
+          display1.print("L");
+        }
+      //NORMAL/ECO MODE
+        display1.setFont();
+        display1.setCursor(112,line1);
+        if (x1parsed->mode<2) { 
+          display1.print("N"); //normal mode
+        } else {
+          display1.print("E"); //eco mode
+        }
+      //WLAN STATUS
+        display1.setFont();
+        display1.setCursor(96,line1);
+        if (wlanstate==wlansearching) { display1.print(FPSTR(s_wlansearchshort)); }
+        if (wlanstate==wlanconnected) { display1.print(FPSTR(s_wlanconshort)); }
+        if (wlanstate==wlanap) { display1.print(FPSTR(s_wlanapshort)); }
+    }
 
     if (showpopup) {
       drawscreen_popup();
     }
+
     #if !defined useoled2
       if (showdialog) {
         drawscreen_dialog();
@@ -1128,7 +1135,7 @@
 #endif //useoled1
 
 #ifdef useoled2
-  void oled2init() {
+  void oled2_init() {
     #ifdef usei2c
       display2.begin(SSD1306_SWITCHCAPVCC, oled2_address, oled_doreset,oled_sda, oled_scl, 800000UL);
     #else
@@ -1145,7 +1152,7 @@
     uint8_t line;
     timestamp_oled2draw=micros();
     if (oledreinit) {
-      oled2init();
+      oled2_init();
       oledreinit=false;
     }
     display2.clearDisplay();
@@ -1223,9 +1230,10 @@
             case stopsubscreen_alarms:
                 drawscreen_header(FPSTR(headline_alerts),subscreen,stopsubscreens);
                 sprintf(val1buf,"%03d",alertcounter_escerror);
-                drawscreen_data(true, 1, false,
+                sprintf(val1buf,"%03d",alertcounter_lockedalert);
+                drawscreen_data(true, 2, false,
                     FPSTR(label_escerrorcounter),&val1buf[0],FPSTR(unit_percent),
-                    NULL,NULL,NULL,
+                    FPSTR(label_alertcounter),&val2buf[0],FPSTR(unit_percent),
                     NULL,NULL,NULL,
                     NULL,NULL,NULL);
               break;
@@ -1302,6 +1310,11 @@
       display2.setFont();
       display2.setCursor(39,31);
       display2.print(FPSTR(s_locked));
+    }
+    if (screen==screen_alert) {  
+      display2.setFont();
+      display2.setCursor(39,31);
+      display2.print(FPSTR(s_alert));
     }
     if (showdialog) {
         drawscreen_dialog();
