@@ -81,8 +81,8 @@ Just be sure to not to use:
 # Before Compiling
 
 ## PATCH your libraries!
- - Adafruit_SSD1306 uses 100kHz I2C Clock per default and does not support individual GPIO Pins for Clock and Data, same goes for SPI Support in that library. forked & fixed version: https://github.com/smartinick/Adafruit_SSD1306
- - arduino-esp32 core implementation of HardwareSerial and esp32-hal-uart only triggers a uart-rx event/interrupt every 112 bytes which makes it impossible to stay within the timing necersarry for the m365 one-wire-uart. (see config.h comments for more details) forked & fixed version: https://github.com/smartinick/arduino-esp32
+ - Adafruit_SSD1306 uses 100kHz I2C Clock per default and does not support individual GPIO Pins for Clock and Data, same goes for SPI Support in that library. forked & fixed version: https://github.com/smartinick/Adafruit_SSD1306 (platformio.ini is configured to use this library - no user interaction needed)
+ - arduino-esp32 core implementation of HardwareSerial and esp32-hal-uart only triggers a uart-rx event/interrupt every 112 bytes which makes it impossible to stay within the timing necersarry for the m365 one-wire-uart. (see config.h comments for more details) forked & fixed version: https://github.com/smartinick/arduino-esp32 (for now this has to be done locally on your dev machine)
 
 ## setup individual settings
 2 files are not included in the repository on purpose: in those files your ssid/passwords and your pinout for  your board are stored. that way you can update the code from the repo and your custom settings are not changed

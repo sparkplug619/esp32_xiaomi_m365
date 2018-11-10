@@ -8,8 +8,10 @@
  *
  * needs patch in esp32-arduino-core/esp32-hal-uart.c (112 byte hardware uart-receive buffer is to big for "realtime" communication)
  *  -> see comments in definitions.h / readme.md and patch yourself or use https://github.com/smartinick/arduino-esp32
- * needs patched Adafruit_SSD1306 Library (custom pins, higher clock speer)
- *  -> compare with base or clone from https://github.com/smartinick/Adafruit_SSD1306
+ * for now this has to be done locally on your dev machine
+ *
+ * needs patched Adafruit_SSD1306 Library (patched fork see https://github.com/smartinick/Adafruit_SSD1306)
+ * platformio.ini is configured to use this library - no user interaction needed
  *
  * known BUGS: 
  * - apssid/appassword not applied when switching from client-mode/search to AP
