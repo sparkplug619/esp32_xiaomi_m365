@@ -64,6 +64,7 @@
   unsigned long timestamp_oled2transfer=0;
   unsigned long duration_telnet=0;
   unsigned long timestamp_telnetstart=0;
+  unsigned long timestamp_showsplashscreen=0;
 
 #ifdef usestatusled
   void handle_led() {
@@ -108,127 +109,23 @@
 
 
 void setup() {
+    init_displays();
   #ifdef usengcode
-    init_ng;
+    init_ng();
+  #else
+    start_m365();
+    DebugSerial.begin(115200);
+    loadconfig();
+    DebugSerial.println(swversion);
+    #ifdef usestatusled
+      pinMode(led,OUTPUT);
+      digitalWrite(led,LOW);
+    #endif
   #endif
-  start_m365();
-#ifdef useoled1
-  oled1_init();
-  drawscreen_startscreen();
-  display1.display();
-#endif
-#ifdef useoled2
-  oled2_init();
-  display1.setRotation(0);
-  drawscreen_startscreen();
-  display1.setRotation(OLED1_ROTATION); //upside down
-  display2.display();
-#endif
-#if defined useoled1 || defined useoled2
-  delay(2000);
-#endif
-#ifdef useoled1
-  display1.clearDisplay();
-  display1.display();
-#endif
-#ifdef useoled2
-  display2.clearDisplay();
-  display2.display();
-#endif
-  #ifdef usestatusled
-    pinMode(led,OUTPUT);
-    digitalWrite(led,LOW);
-  #endif
-  DebugSerial.begin(115200);
-  loadconfig();
-  DebugSerial.println(swversion);
   wlanstate=wlanturnstaon;
-  uint64_t cit;
-  cit = ESP.getEfuseMac();
-  sprintf(chipid,"%02X%02X%02X",(uint8_t)(cit>>24),(uint8_t)(cit>>32),(uint8_t)(cit>>40));
-  DebugSerial.println(chipid);
-  sprintf(mac,"%02X%02X%02X%02X%02X%02X",(uint8_t)(cit),(uint8_t)(cit>>8),(uint8_t)(cit>>16),(uint8_t)(cit>>24),(uint8_t)(cit>>32),(uint8_t)(cit>>40));
-  ArduinoOTA.onStart([]() {
-    DebugSerial.println("OTA Start");
-    #if !defined useoled2
-        oled1_init();
-        display1.clearDisplay();
-        display1.display();
-    #endif
-    #ifdef useoled2
-        oled1_init();
-        oled2_init();
-        display1.clearDisplay();
-        drawscreen_startscreen();
-        display1.display();
-        display2.clearDisplay();
-        display2.display();
-    #endif
-  });
-  ArduinoOTA.onEnd([]() {
-    DebugSerial.println("\nOTA End");
-  });
-
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    DebugSerial.printf("OTA %02u%%\r\n", (progress / (total / 100)));
-    #if (defined useoled1 && !defined useoled2)
-        if ((progress / (total / 100))>lastprogress) {
-          lastprogress = progress / (total / 100);
-        }
-        display1.clearDisplay();
-        display1.setTextSize(1);
-        display1.setTextColor(WHITE);
-        display1.setCursor(0,10);
-        display1.setFont();
-        display1.print("  Updating  Firmware");
-        display1.setCursor(54,50);
-        display1.printf("%02u%%", lastprogress);
-        display1.drawRect(14,25,100,10,WHITE);
-        //display1.drawRect(15,33,14+(uint8_t)lastprogress,39,WHITE);
-        display1.fillRect(14,26,(uint8_t)lastprogress,8,WHITE);
-        display1.display();
-    #endif
-    #ifdef useoled2
-        if ((progress / (total / 100))>lastprogress) {
-          lastprogress = progress / (total / 100);
-        }
-        display2.clearDisplay();
-        display2.setTextSize(1);
-        display2.setTextColor(WHITE);
-        display2.setCursor(0,10);
-        display2.setFont();
-        display2.print("  Updating  Firmware");
-        display2.setCursor(54,50);
-        display2.printf("%02u%%", lastprogress);
-        display2.drawRect(14,25,100,10,WHITE);
-        //display1.drawRect(15,33,14+(uint8_t)lastprogress,39,WHITE);
-        display2.fillRect(14,26,(uint8_t)lastprogress,8,WHITE);
-        display2.display();
-    #endif
-  });
-  ArduinoOTA.onError([](ota_error_t error) {
-    if (error == OTA_AUTH_ERROR) sprintf(tmp1,"%s","Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) sprintf(tmp1,"%s","Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) sprintf(tmp1,"%s","Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) sprintf(tmp1,"%s","Receive Failed");
-    else if (error == OTA_END_ERROR) sprintf(tmp1,"%s","End Failed");
-    sprintf(tmp2, "OTA Error [%u]: %s", error, tmp1);
-    DebugSerial.println(tmp2);
-    #ifdef useoled1
-      display1.clearDisplay();
-      display1.setTextSize(1);
-      display1.setTextColor(WHITE);
-      display1.setCursor(0,0);
-      display1.setFont();
-      display1.printf("OTA ERROR\r\nNr: %u\r\n%s", error,tmp1);
-      display1.display();
-      delay(2000); //give user a chance to read before reboot
-    #endif    
-  });
-  ArduinoOTA.setPassword(OTApwd);
-  sprintf(tmp2, "es-m365-%s",mac);
-  ArduinoOTA.setHostname(tmp2);
 } //setup
+
+
 
 void loop() {
   timestamp_mainloopstart=micros();

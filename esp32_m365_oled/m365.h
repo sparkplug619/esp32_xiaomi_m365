@@ -247,7 +247,8 @@ extern HardwareSerial M365Serial;  // UART2 for M365
   extern uint16_t alertcounter_bmstemp;
   extern uint16_t alertcounter_esctemp;
   extern uint16_t alertcounter_undervoltage;
-
+  extern uint16_t alertcounter_lockedalarm;
+                  
 //scooter-config stuff
   #define wheelfact8km 1.0f
   #define wheelfact8miles  0.621371192f

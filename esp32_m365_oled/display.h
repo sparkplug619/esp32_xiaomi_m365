@@ -111,6 +111,7 @@
   #define screen_alarm 6 //error counters & state
   #define screen_locked 7
   #define screen_alert 8 //alert screen when scooter is locked and moved
+  #define screen_splash 9 //splashscreen on startup
 
   extern uint8_t subscreen;
   extern uint8_t windowsubpos;
@@ -239,7 +240,7 @@
     };
 #endif
 
-
+void init_displays(void);
 void drawscreen_startscreen(void);
 void drawscreen_header(const char *h, uint8_t scrnum, uint8_t scrtotal);
 void drawscreen_data(bool headline, uint8_t lines, bool showunits,

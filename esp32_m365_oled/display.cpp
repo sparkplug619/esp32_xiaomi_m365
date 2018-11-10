@@ -1,5 +1,6 @@
 #include "display.h"
 #include "strings.h"
+#include "definitions.h"
 
 #if (defined usei2c && defined useoled1)
     Adafruit_SSD1306 display1(oled_reset);
@@ -45,7 +46,7 @@
     char popuptext[100];
 
   //screenhandling
-    uint8_t screen = 0;
+    uint8_t screen = screen_splash;
     uint8_t subscreen = 0;
     uint8_t windowsubpos=0;
     uint8_t throttlemin = throttlemindefault;
@@ -81,6 +82,29 @@
     #define buttonbothlongpressedduration 500 //millis needed for long press
     unsigned long buttonbothpressedtimestamp = 0;
 
+
+void init_displays() {
+  #ifdef useoled1
+    oled1_init();
+    drawscreen_startscreen();
+    display1.display();
+  #endif
+  #ifdef useoled2
+    oled2_init();
+    display1.setRotation(0);
+    drawscreen_startscreen();
+    display1.setRotation(OLED1_ROTATION); //upside down
+    display2.display();
+  #endif
+  #if defined useoled1 || defined useoled2
+    timestamp_showsplashscreen= millis() + splashscreentimeout;
+    screen = screen_splash;
+    //delay(2000);
+  #endif
+} //init_displays
+
+
+//screen layout/drawing
 
   void drawscreen_startscreen() {
     display1.setFont();
@@ -176,7 +200,7 @@
     } //for i
   } //drawscreen
 
-
+//popup "windows"
   void infopopup (char *_popuptitle, char *_popuptext, uint16_t duration) {
     if (!showdialog) {
       sprintf(popuptitle, "%s", _popuptitle);
@@ -371,285 +395,296 @@
   void oled_switchscreens() {
     uint8_t oldscreen = screen;
     
-    //1st. prio: Data/Bus Timeout
-      if ((m365packettimestamp+m365packettimeout)<millis() & screen!=screen_timeout) {
-        screen=screen_timeout;
+    //splashscreen shown? do nothing...
+    if (screen==screen_splash) {
+      if (timestamp_showsplashscreen>millis()) {
+        screen = screen_stop;
         updatescreen=true;
         return;
       }
-      if ((screen==screen_timeout) & ((m365packettimestamp+m365packettimeout)>millis())) {
-        if (escparsed->speed>0) {
-          screen=screen_drive;  
-        } else {
-          screen=screen_stop;  
-        }
-        updatescreen=true; 
-      }
-
-    //2nd prio - locked or alert in lockmode?
-    if (escparsed->lockstate==0x02 & screen!=screen_configmenu) {
-      screen=screen_locked;
-    }
-
-    if (escparsed->lockstate==0x09 & screen!=screen_configmenu) {
-      screen=screen_alert;
-    }
-    
-    //"button" handling
-      if (newdata & (bleparsed->brake>=buttonbrakepressed1) & !brakebuttonpressed) {
-        buttonbrakepressedtimestamp = millis();
-        brakebuttonpressed=true;
-        brakebuttonstate=0;
-      }
-      if (newdata & (bleparsed->brake<buttonbrakepressed1) & brakebuttonpressed) {
-        if (millis()>buttonbrakepressedtimestamp+buttonbrakelongpressedduration) { 
-          brakebuttonstate=2;
-        } else {
-          if (millis()>buttonbrakepressedtimestamp+buttonbrakeshortpressedduration) { 
-            brakebuttonstate=1;
+    } else {
+      //no splashscreen, go on wih normal screen-switching:
+        //1st. prio: Data/Bus Timeout
+          if ((m365packettimestamp+m365packettimeout)<millis() & screen!=screen_timeout) {
+            screen=screen_timeout;
+            updatescreen=true;
+            return;
           }
-        }
-        if (brakebuttonstate!=0) { brakebuttonpressed=false; }
-      }
+          if ((screen==screen_timeout) & ((m365packettimestamp+m365packettimeout)>millis())) {
+            if (escparsed->speed>0) {
+              screen=screen_drive;  
+            } else {
+              screen=screen_stop;  
+            }
+            updatescreen=true; 
+          }
 
-      if (newdata & (bleparsed->throttle>=buttonthrottlepressed1) & !throttlebuttonpressed) {
-        buttonthrottlepressedtimestamp = millis();
-        throttlebuttonpressed=true;
-        throttlebuttonstate=0;
-      }
-      if (newdata & (bleparsed->throttle<buttonthrottlepressed1) & throttlebuttonpressed) {
-        if (millis()>buttonthrottlepressedtimestamp+buttonthrottlelongpressedduration) { 
-          throttlebuttonstate=2;
-        } else {
-          if (millis()>buttonthrottlepressedtimestamp+buttonthrottleshortpressedduration) { 
-            throttlebuttonstate=1;
-          }
+        //2nd prio - locked or alert in lockmode?
+        if (escparsed->lockstate==0x02 & screen!=screen_configmenu) {
+          screen=screen_locked;
         }
-        if (throttlebuttonstate!=0) { throttlebuttonpressed=false; }
-      }
 
-      if (newdata & (bleparsed->brake>=buttonbrakepressed1) & (bleparsed->throttle>=buttonthrottlepressed1) & !bothbuttonpressed & screen!=screen_configmenu) {
-        buttonbothpressedtimestamp = millis();
-        bothbuttonpressed=true;
-        bothbuttonstate=0;
-      }
-      if (newdata & (bleparsed->brake<buttonbrakepressed1) & (bleparsed->throttle<buttonthrottlepressed1) & bothbuttonpressed) {
-        if (millis()>buttonbothpressedtimestamp+buttonbothlongpressedduration) { 
-          bothbuttonstate=2;
-        } else {
-          if (millis()>buttonbothpressedtimestamp+buttonbothshortpressedduration) { 
-            bothbuttonstate=1;
-          }
+        if (escparsed->lockstate==0x09 & screen!=screen_configmenu) {
+          screen=screen_alert;
         }
-        if (bothbuttonstate!=0) { bothbuttonpressed=false; }
-      }
-    
-    //execute commands from configscreen
-      if (screen==screen_configmenu) {
-        if (showdialog) {
-          //1st prio: handle value-change dialogs
-          updatescreen = true;
-          *diag_value = map(bleparsed->throttle,throttlemin,throttlemax,diag_min,diag_max);
-          if (brakebuttonstate!=0) { //brake pressed, exit dialog?
-            showdialog = false;
+        
+        //"button" handling
+          if (newdata & (bleparsed->brake>=buttonbrakepressed1) & !brakebuttonpressed) {
+            buttonbrakepressedtimestamp = millis();
+            brakebuttonpressed=true;
+            brakebuttonstate=0;
           }
-        } else {
-          //2nd prio: handle brake-button actions
-          //if (screen==screen_configmenu & brakebuttonstate!=0 & !showdialog) {
-          if (brakebuttonstate!=0 & !showpopup) {  
-            handle_configmenuactions();
+          if (newdata & (bleparsed->brake<buttonbrakepressed1) & brakebuttonpressed) {
+            if (millis()>buttonbrakepressedtimestamp+buttonbrakelongpressedduration) { 
+              brakebuttonstate=2;
+            } else {
+              if (millis()>buttonbrakepressedtimestamp+buttonbrakeshortpressedduration) { 
+                brakebuttonstate=1;
+              }
+            }
+            if (brakebuttonstate!=0) { brakebuttonpressed=false; }
+          }
+
+          if (newdata & (bleparsed->throttle>=buttonthrottlepressed1) & !throttlebuttonpressed) {
+            buttonthrottlepressedtimestamp = millis();
+            throttlebuttonpressed=true;
+            throttlebuttonstate=0;
+          }
+          if (newdata & (bleparsed->throttle<buttonthrottlepressed1) & throttlebuttonpressed) {
+            if (millis()>buttonthrottlepressedtimestamp+buttonthrottlelongpressedduration) { 
+              throttlebuttonstate=2;
+            } else {
+              if (millis()>buttonthrottlepressedtimestamp+buttonthrottleshortpressedduration) { 
+                throttlebuttonstate=1;
+              }
+            }
+            if (throttlebuttonstate!=0) { throttlebuttonpressed=false; }
+          }
+
+          if (newdata & (bleparsed->brake>=buttonbrakepressed1) & (bleparsed->throttle>=buttonthrottlepressed1) & !bothbuttonpressed & screen!=screen_configmenu) {
+            buttonbothpressedtimestamp = millis();
+            bothbuttonpressed=true;
+            bothbuttonstate=0;
+          }
+          if (newdata & (bleparsed->brake<buttonbrakepressed1) & (bleparsed->throttle<buttonthrottlepressed1) & bothbuttonpressed) {
+            if (millis()>buttonbothpressedtimestamp+buttonbothlongpressedduration) { 
+              bothbuttonstate=2;
+            } else {
+              if (millis()>buttonbothpressedtimestamp+buttonbothshortpressedduration) { 
+                bothbuttonstate=1;
+              }
+            }
+            if (bothbuttonstate!=0) { bothbuttonpressed=false; }
+          }
+        
+        //execute commands from configscreen
+          if (screen==screen_configmenu) {
+            if (showdialog) {
+              //1st prio: handle value-change dialogs
+              updatescreen = true;
+              *diag_value = map(bleparsed->throttle,throttlemin,throttlemax,diag_min,diag_max);
+              if (brakebuttonstate!=0) { //brake pressed, exit dialog?
+                showdialog = false;
+              }
+            } else {
+              //2nd prio: handle brake-button actions
+              //if (screen==screen_configmenu & brakebuttonstate!=0 & !showdialog) {
+              if (brakebuttonstate!=0 & !showpopup) {  
+                handle_configmenuactions();
+                updatescreen = true;
+              }
+            }
+          }
+
+        //enter configmenu
+          if (bothbuttonstate!=0 & escparsed->speed==0 & screen!=screen_configmenu) {
+            screen = screen_configmenu;
+            subscreen = 0;
+            configchanged = false;
+            updatescreen = true;
+            infopopup((char*)"  MENU", (char*)"release throttle!", 1000);
+          }
+        /*
+        //exit from configmenu via long-brake-press --> we use "Exit" option in menu
+          if (brakebuttonstate==2 & screen==screen_configmenu) {
+          //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
+            if (configchanged) { saveconfig(); }
+            screen = screen_stop;
+            subscreen = 0;
             updatescreen = true;
           }
-        }
-      }
+          */
+          //exit from configmenu if speed > 5km/h
+          if (screen==screen_configmenu & (abs((float)escparsed->speed/1000.0f)>5.0f)) {
+          //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
+            if (configchanged) { saveconfig(); }
+            screen = screen_drive;
+            subscreen = 0;
+            updatescreen = true;
+          }
 
-    //enter configmenu
-      if (bothbuttonstate!=0 & escparsed->speed==0 & screen!=screen_configmenu) {
-        screen = screen_configmenu;
-        subscreen = 0;
-        configchanged = false;
-        updatescreen = true;
-        infopopup((char*)"  MENU", (char*)"release throttle!", 1000);
-      }
-    /*
-    //exit from configmenu via long-brake-press --> we use "Exit" option in menu
-      if (brakebuttonstate==2 & screen==screen_configmenu) {
-      //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
-        if (configchanged) { saveconfig(); }
-        screen = screen_stop;
-        subscreen = 0;
-        updatescreen = true;
-      }
-      */
-      //exit from configmenu if speed > 5km/h
-      if (screen==screen_configmenu & (abs((float)escparsed->speed/1000.0f)>5.0f)) {
-      //if (brakebuttonstate==1 & screen==screen_stop & subscreen == stopsubscreens) {
-        if (configchanged) { saveconfig(); }
-        screen = screen_drive;
-        subscreen = 0;
-        updatescreen = true;
-      }
+        //configmenu navigaton via gas:
+        if (newdata & (screen==screen_configmenu) & !(showdialog|showpopup)) {
+          uint8_t oldsubscreen = subscreen;
+          if (bleparsed->throttle>throttlemin+5) {
+            subscreen = ((bleparsed->throttle-throttlemin) / configwindowsize)+1;
+            subscreen=_min(subscreen,configsubscreens-1);
+            windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % configwindowsize)*(float)oledwidth/(float)configwindowsize);
+          } else {
+            subscreen=0;
+            windowsubpos=0;
+          }
+          if ((subscreen)>configsubscreens) { subscreen=configsubscreens; }
+          if (subscreen!=oldsubscreen) { 
+            configstartindex = _max(subscreen - configlinesabove,0);
+            configendindex = _min(configstartindex + confignumlines-1,configsubscreens-1);
+            if ((configendindex-confignumlines+1)<configstartindex) {
+              configstartindex = configendindex - confignumlines+1;
+            }
+            updatescreen = true; 
+          }
+        }
+        //charging screens: 
+          if (newdata & (escparsed->speed==0) & (bmsparsed->current<0) & (screen!=screen_charging)) { 
+            if  (screen!=screen_locked) {
+              //only display if not locked...
+              screen=screen_charging; 
+            }
+            //timeout_oled=millis()+oledchargestarttimeout;
+            capacitychargestart = bmsparsed->remainingcapacity;
+            updatescreen=true;
+          }
+          if (newdata & (screen==screen_charging) & (abs((float)escparsed->speed/1000.0f)>2.0f)) { 
+            if (abs((float)escparsed->speed/1000.0f)>0.9f) {
+              screen=screen_drive;  
+            } else {
+              screen=screen_stop;  
+            }
+            updatescreen=true;
+          }
 
-    //configmenu navigaton via gas:
-    if (newdata & (screen==screen_configmenu) & !(showdialog|showpopup)) {
-      uint8_t oldsubscreen = subscreen;
-      if (bleparsed->throttle>throttlemin+5) {
-        subscreen = ((bleparsed->throttle-throttlemin) / configwindowsize)+1;
-        subscreen=_min(subscreen,configsubscreens-1);
-        windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % configwindowsize)*(float)oledwidth/(float)configwindowsize);
-      } else {
-        subscreen=0;
-        windowsubpos=0;
-      }
-      if ((subscreen)>configsubscreens) { subscreen=configsubscreens; }
-      if (subscreen!=oldsubscreen) { 
-        configstartindex = _max(subscreen - configlinesabove,0);
-        configendindex = _min(configstartindex + confignumlines-1,configsubscreens-1);
-        if ((configendindex-confignumlines+1)<configstartindex) {
-          configstartindex = configendindex - confignumlines+1;
-        }
-        updatescreen = true; 
-      }
-    }
-    //charging screens: 
-      if (newdata & (escparsed->speed==0) & (bmsparsed->current<0) & (screen!=screen_charging)) { 
-        if  (screen!=screen_locked) {
-          //only display if not locked...
-          screen=screen_charging; 
-        }
-        //timeout_oled=millis()+oledchargestarttimeout;
-        capacitychargestart = bmsparsed->remainingcapacity;
-        updatescreen=true;
-      }
-      if (newdata & (screen==screen_charging) & (abs((float)escparsed->speed/1000.0f)>2.0f)) { 
-        if (abs((float)escparsed->speed/1000.0f)>0.9f) {
-          screen=screen_drive;  
-        } else {
-          screen=screen_stop;  
-        }
-        updatescreen=true;
-      }
+        //switch between driving/stop screens:
+          //maybe add a speed treshold like 0.3km/h to keep showing "stop" screen
+          //if (newdata & (screen==screen_drive) & (escparsed->speed==0)) {
+          if (newdata & (screen==screen_drive) & (abs((float)escparsed->speed/1000.0f)<0.5f)) {
+          //if (newdata & ((x1parsed->mode==0)|(x1parsed->mode==2))) {
+            screen=screen_stop;
+            updatescreen=true;
+          }
+          //if (newdata & (screen==screen_stop) & (escparsed->speed>0)) {
+          if (newdata & (screen==screen_stop) & (abs((float)escparsed->speed/1000.0f)>0.9f)) {
+            
+          //if (newdata & ((x1parsed->mode==1)|(x1parsed->mode==3))) {
+            screen=screen_drive;
+            updatescreen=true;
+          }
 
-    //switch between driving/stop screens:
-      //maybe add a speed treshold like 0.3km/h to keep showing "stop" screen
-      //if (newdata & (screen==screen_drive) & (escparsed->speed==0)) {
-      if (newdata & (screen==screen_drive) & (abs((float)escparsed->speed/1000.0f)<0.5f)) {
-      //if (newdata & ((x1parsed->mode==0)|(x1parsed->mode==2))) {
-        screen=screen_stop;
-        updatescreen=true;
-      }
-      //if (newdata & (screen==screen_stop) & (escparsed->speed>0)) {
-      if (newdata & (screen==screen_stop) & (abs((float)escparsed->speed/1000.0f)>0.9f)) {
+        //switching of subscreens via throttle while we are in STOP mode
+        if (newdata & (screen==screen_stop)) {
+          uint8_t oldsubscreen = subscreen;
+          if (bleparsed->throttle>throttlemin+5) {
+            subscreen = ((bleparsed->throttle-throttlemin) / stopwindowsize)+1;
+            windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % stopwindowsize)*(float)oledwidth/(float)stopwindowsize);
+          } else {
+            subscreen=0;
+            windowsubpos=0;
+          }
+          if ((subscreen)>stopsubscreens) { subscreen=stopsubscreens; }
+          if (subscreen!=oldsubscreen) { updatescreen = true; }
+        }
         
-      //if (newdata & ((x1parsed->mode==1)|(x1parsed->mode==3))) {
-        screen=screen_drive;
-        updatescreen=true;
-      }
+        #if !defined useoled2
+        //switching of subscreens via throttle while we are in CHARGE mode, only needed with one screen
+        if (newdata & (screen==screen_charging)) {
+          uint8_t oldsubscreen = subscreen;
+          if (bleparsed->throttle>=throttlemin) {
+            subscreen = ((bleparsed->throttle-throttlemin) / chargewindowsize)+1;
+            windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % chargewindowsize)*(float)oledwidth/(float)chargewindowsize);
+          } else {
+            subscreen=1;
+            windowsubpos=0;
+          }
+          if ((subscreen)>chargesubscreens) { subscreen=chargesubscreens; }
+          if (subscreen!=oldsubscreen) { updatescreen = true; }
+        }
+        #endif
 
-    //switching of subscreens via throttle while we are in STOP mode
-    if (newdata & (screen==screen_stop)) {
-      uint8_t oldsubscreen = subscreen;
-      if (bleparsed->throttle>throttlemin+5) {
-        subscreen = ((bleparsed->throttle-throttlemin) / stopwindowsize)+1;
-        windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % stopwindowsize)*(float)oledwidth/(float)stopwindowsize);
-      } else {
-        subscreen=0;
-        windowsubpos=0;
-      }
-      if ((subscreen)>stopsubscreens) { subscreen=stopsubscreens; }
-      if (subscreen!=oldsubscreen) { updatescreen = true; }
-    }
-    
-    #if !defined useoled2
-    //switching of subscreens via throttle while we are in CHARGE mode, only needed with one screen
-    if (newdata & (screen==screen_charging)) {
-      uint8_t oldsubscreen = subscreen;
-      if (bleparsed->throttle>=throttlemin) {
-        subscreen = ((bleparsed->throttle-throttlemin) / chargewindowsize)+1;
-        windowsubpos = (uint8_t)((float)((bleparsed->throttle-throttlemin) % chargewindowsize)*(float)oledwidth/(float)chargewindowsize);
-      } else {
-        subscreen=1;
-        windowsubpos=0;
-      }
-      if ((subscreen)>chargesubscreens) { subscreen=chargesubscreens; }
-      if (subscreen!=oldsubscreen) { updatescreen = true; }
-    }
-    #endif
+        //update with new data, but honor refresh-rate
+          if (newdata & (olednextrefreshtimestamp<millis())) { 
+          //if ((olednextrefreshtimestamp<millis())) { 
+            updatescreen=true;
+            newdata=false; 
+          }
 
-    //update with new data, but honor refresh-rate
-      if (newdata & (olednextrefreshtimestamp<millis())) { 
-      //if ((olednextrefreshtimestamp<millis())) { 
-        updatescreen=true;
-        newdata=false; 
-      }
+        //update subscriptions if screen has been changed
+          if (oldscreen!=screen) { 
+            //DebugSerial.printf("---screen: %d\r\n",screen);
+            subscribedrequests=rqsarray[screen];
+          }
+        //reset newdata flag if we consumed it
+          if (updatescreen) { newdata=false; }
+        
+        //DebugSerial.printf("### Br: %03d Thr: %03d B: %01d T: %01d BT: %01d Scr: %01d\r\n",escparsed->brake, escparsed->throttle, brakebuttonstate, throttlebuttonstate, bothbuttonstate, screen);
+        //reset buttonstate
+          brakebuttonstate=0;
+          throttlebuttonstate=0;
+          bothbuttonstate=0;
 
-    //update subscriptions if screen has been changed
-      if (oldscreen!=screen) { 
-        //DebugSerial.printf("---screen: %d\r\n",screen);
-        subscribedrequests=rqsarray[screen];
-      }
-    //reset newdata flag if we consumed it
-      if (updatescreen) { newdata=false; }
-    
-    //DebugSerial.printf("### Br: %03d Thr: %03d B: %01d T: %01d BT: %01d Scr: %01d\r\n",escparsed->brake, escparsed->throttle, brakebuttonstate, throttlebuttonstate, bothbuttonstate, screen);
-    //reset buttonstate
-      brakebuttonstate=0;
-      throttlebuttonstate=0;
-      bothbuttonstate=0;
-
-    //popup timeout handling
-    if ((showpopup) & (millis() > popuptimestamp)) {
-      showpopup = false;
-    }
+        //popup timeout handling
+        if ((showpopup) & (millis() > popuptimestamp)) {
+          showpopup = false;
+        }
+    } //if else screen==screen_splash
   } //oled_switchscreens
 
+//configmenu helpers:
   void cm_printKey(uint8_t entryid) {
-            switch(entryid) {
-              case cms_light: display1.print(FPSTR(menu_light));
-                break;
-              case cms_cruise: 
-                  display1.print(FPSTR(menu_cruise));
-                break;
-              case cms_kers: 
-                  display1.print(FPSTR(menu_kers));
-                break;
-              case cms_ws: display1.print(FPSTR(menu_wheelsize));
-                break;
-              case cms_unit: display1.print(FPSTR(menu_unit));
-                break;
-              case cms_buv: display1.print(FPSTR(menu_battalertlowvoltage));
-                break;
-              case cms_bc: display1.print(FPSTR(menu_battcells));
-                break;
-              case cms_bac: display1.print(FPSTR(menu_battalertcell));
-                break;
-              case cms_bat: display1.print(FPSTR(menu_battalerttemp));
-                break;
-              case cms_eat: display1.print(FPSTR(menu_escalerttemp));
-                break;
-              /*case cms_flashprotection: display1.print("***shprot");
-                break;
-              case cms_navigation: display1.print("***igation");
-                break;*/
-              case cms_beeponalert: display1.print(FPSTR(menu_beeponalert));
-                break;
-              case cms_busmode: display1.print(FPSTR(menu_espbusmode));
-                break;
-              case cms_wifirestart: display1.print(FPSTR(menu_espwifirestart));
-                break;
-              case cms_changelock: 
-                    if (escparsed->lockstate==0x00) {
-                      display1.print(FPSTR(menu_m365lock));
-                    } else {
-                      display1.print(FPSTR(menu_m365unlock));
-                    }
-                break;
-              case cms_turnoff: display1.print(FPSTR(menu_m365turnoff));
-                break;
-              case cms_exit: display1.print(FPSTR(menu_exit));
-                break;
-            } //switch curline
-  }
+    switch(entryid) {
+      case cms_light: display1.print(FPSTR(menu_light));
+        break;
+      case cms_cruise: 
+          display1.print(FPSTR(menu_cruise));
+        break;
+      case cms_kers: 
+          display1.print(FPSTR(menu_kers));
+        break;
+      case cms_ws: display1.print(FPSTR(menu_wheelsize));
+        break;
+      case cms_unit: display1.print(FPSTR(menu_unit));
+        break;
+      case cms_buv: display1.print(FPSTR(menu_battalertlowvoltage));
+        break;
+      case cms_bc: display1.print(FPSTR(menu_battcells));
+        break;
+      case cms_bac: display1.print(FPSTR(menu_battalertcell));
+        break;
+      case cms_bat: display1.print(FPSTR(menu_battalerttemp));
+        break;
+      case cms_eat: display1.print(FPSTR(menu_escalerttemp));
+        break;
+      /*case cms_flashprotection: display1.print("***shprot");
+        break;
+      case cms_navigation: display1.print("***igation");
+        break;*/
+      case cms_beeponalert: display1.print(FPSTR(menu_beeponalert));
+        break;
+      case cms_busmode: display1.print(FPSTR(menu_espbusmode));
+        break;
+      case cms_wifirestart: display1.print(FPSTR(menu_espwifirestart));
+        break;
+      case cms_changelock: 
+            if (escparsed->lockstate==0x00) {
+              display1.print(FPSTR(menu_m365lock));
+            } else {
+              display1.print(FPSTR(menu_m365unlock));
+            }
+        break;
+      case cms_turnoff: display1.print(FPSTR(menu_m365turnoff));
+        break;
+      case cms_exit: display1.print(FPSTR(menu_exit));
+        break;
+    } //switch curline
+  } //cm_printKey
 
   void cm_printValue(uint8_t entryid) {
     #if!defined useoled2
@@ -659,112 +694,106 @@
     #ifdef useoled2
       displaydraw->setCursor(5,31-baselineoffset/2);
     #endif
-            switch(entryid) {
-              case cms_light:
-                    switch(escparsed->taillight) {
-                      case 0: displaydraw->print(FPSTR(menu_off)); break;
-                      case 2: displaydraw->print(FPSTR(menu_on)); break;
-                    }
-                break;
-              case cms_cruise: 
-                    switch(escparsed->cruisemode) {
-                      case 0: displaydraw->print(FPSTR(menu_off)); break;
-                      case 1: displaydraw->print(FPSTR(menu_on)); break;
-                    }
-                break;
-              case cms_kers: 
-                    switch(escparsed->kers) {
-                      case 0: displaydraw->print(FPSTR(menu_weak)); break;
-                      case 1: displaydraw->print(FPSTR(menu_medium)); break;
-                      case 2: displaydraw->print(FPSTR(menu_strong)); break;
-                    }
-                break;
-              case cms_ws: 
-                  if (conf_wheelsize==0) { displaydraw->print("8.5\""); }
-                  if (conf_wheelsize==1) { displaydraw->print("10\""); }
-                  if (conf_wheelsize>1) { displaydraw->print("???"); }
-                break;
-              case cms_unit: 
-                  if (conf_unit==0) { displaydraw->print(FPSTR(menu_km)); }
-                  if (conf_unit==1) { displaydraw->print(FPSTR(menu_miles)); }
-                break;
-              case cms_bc:
-                  displaydraw->printf("%d", conf_battcells);
-                break;
-              case cms_buv: 
-                  displaydraw->printf("%d V", conf_alert_batt_voltage);
-                break;
-              case cms_bac:
-                  displaydraw->printf("%d0 mV", conf_alert_batt_celldiff);
-                break;
-              case cms_bat:
-                    displaydraw->printf("%d C", conf_alert_batt_temp);
-                break;
-              case cms_eat:
-                      displaydraw->printf("%d C", conf_alert_esc_temp);
-                break;
-              //case cms_flashprotection: displaydraw->print("no value");
-              //case cms_navigation: displaydraw->print("no value");
-              case cms_beeponalert:
-                  if (conf_beeponalert) { 
-                    displaydraw->print(FPSTR(menu_on));
-                  } else { 
-                    displaydraw->print(FPSTR(menu_off)); 
-                  }
-                break;
-              case cms_busmode:
-                  if (conf_espbusmode) { 
-                    displaydraw->print(FPSTR(menu_active));
-                  } else { 
-                    displaydraw->print(FPSTR(menu_passive)); 
-                  }
-                break;
-              //case cms_wifirestart: displaydraw->print("no value");
-              //case cms_changelock:  displaydraw->print("no value");
-              //case cms_turnoff:  displaydraw->print("no value");
-              //case cms_exit:  displaydraw->print("no value");
-            } //switch curline
-  }
+    switch(entryid) {
+      case cms_light:
+            switch(escparsed->taillight) {
+              case 0: displaydraw->print(FPSTR(menu_off)); break;
+              case 2: displaydraw->print(FPSTR(menu_on)); break;
+            }
+        break;
+      case cms_cruise: 
+            switch(escparsed->cruisemode) {
+              case 0: displaydraw->print(FPSTR(menu_off)); break;
+              case 1: displaydraw->print(FPSTR(menu_on)); break;
+            }
+        break;
+      case cms_kers: 
+            switch(escparsed->kers) {
+              case 0: displaydraw->print(FPSTR(menu_weak)); break;
+              case 1: displaydraw->print(FPSTR(menu_medium)); break;
+              case 2: displaydraw->print(FPSTR(menu_strong)); break;
+            }
+        break;
+      case cms_ws: 
+          if (conf_wheelsize==0) { displaydraw->print("8.5\""); }
+          if (conf_wheelsize==1) { displaydraw->print("10\""); }
+          if (conf_wheelsize>1) { displaydraw->print("???"); }
+        break;
+      case cms_unit: 
+          if (conf_unit==0) { displaydraw->print(FPSTR(menu_km)); }
+          if (conf_unit==1) { displaydraw->print(FPSTR(menu_miles)); }
+        break;
+      case cms_bc:
+          displaydraw->printf("%d", conf_battcells);
+        break;
+      case cms_buv: 
+          displaydraw->printf("%d V", conf_alert_batt_voltage);
+        break;
+      case cms_bac:
+          displaydraw->printf("%d0 mV", conf_alert_batt_celldiff);
+        break;
+      case cms_bat:
+            displaydraw->printf("%d C", conf_alert_batt_temp);
+        break;
+      case cms_eat:
+              displaydraw->printf("%d C", conf_alert_esc_temp);
+        break;
+      //case cms_flashprotection: displaydraw->print("no value");
+      //case cms_navigation: displaydraw->print("no value");
+      case cms_beeponalert:
+          if (conf_beeponalert) { 
+            displaydraw->print(FPSTR(menu_on));
+          } else { 
+            displaydraw->print(FPSTR(menu_off)); 
+          }
+        break;
+      case cms_busmode:
+          if (conf_espbusmode) { 
+            displaydraw->print(FPSTR(menu_active));
+          } else { 
+            displaydraw->print(FPSTR(menu_passive)); 
+          }
+        break;
+      //case cms_wifirestart: displaydraw->print("no value");
+      //case cms_changelock:  displaydraw->print("no value");
+      //case cms_turnoff:  displaydraw->print("no value");
+      //case cms_exit:  displaydraw->print("no value");
+    } //switch curline
+  } //cm_printValue
 
-  
+//handle oled_updates  
   void handle_oled() {
     timestamp_oledstart=micros();
     oled_switchscreens();
-    //TEST TWEAK
-    //screen=screen_charging;
-    //screen=screen_timeout;
-    //screen=screen_error; escparsed->error=12;
-    //screen=screen_stop; subscreen=4;
+    //check if oledreinitduration has passed and toggle flags for re-initialization of displays
     if (millis() > oledreinittimestamp) {
         oledreinit = true;
         oledreinittimestamp = millis() + oledreinitduration;
     }
 
-    #ifdef useoled2 //workaround for slow i2c & 2 displays to avoid too long blocking of main code
-      if (updatescreen2) {
-        oled2_update();
-        updatescreen2=false;
-        //DebugSerial.printf("---OLED2----- %02d %d\r\n",screen, millis());
-      } else {
-    #endif
-        if (updatescreen) {
-          olednextrefreshtimestamp=millis()+oledrefreshanyscreen;
-          oled1_update();
-          //oled2_update();
-          updatescreen=false;
-          //DebugSerial.printf("---OLED1----- %02d %d\r\n",screen, millis());
-        }
-    #ifdef useoled2
+  #ifdef useoled2 //workaround for slow i2c & 2 displays to avoid too long blocking of main code
+    if (updatescreen2) {
+      oled2_update();
+      updatescreen2=false;
+      //DebugSerial.printf("---OLED2----- %02d %d\r\n",screen, millis());
+    } else {
+  #endif
+      if (updatescreen) {
+        olednextrefreshtimestamp=millis()+oledrefreshanyscreen;
+        oled1_update();
+        //oled2_update();
+        updatescreen=false;
+        //DebugSerial.printf("---OLED1----- %02d %d\r\n",screen, millis());
       }
-    #endif
+  #ifdef useoled2
+    }
+  #endif
     duration_oled = micros()-timestamp_oledstart;
     oled_blink!=oled_blink;
   }
-
-
-
 #endif //useoled1 or useoled2
 
+//oled init & screen-drawing
 #ifdef useoled1
   void oled1_init() {
     #ifdef usei2c
@@ -790,7 +819,9 @@
         oledreinit=false;
       #endif
     }
-    display1.clearDisplay();
+    if (screen!=screen_splash) {
+      display1.clearDisplay();
+    }
     displaydraw = &display1;
     
     if (screen==screen_drive) {
@@ -1155,7 +1186,9 @@
       oled2_init();
       oledreinit=false;
     }
-    display2.clearDisplay();
+    if (screen!=screen_splash) {
+      display2.clearDisplay();
+    }
     displaydraw = &display2;
     if (screen==screen_drive) {
         displaydraw->setFont(&ARIALNB18pt7b); displaydraw->setCursor(0,31); displaydraw->printf("%3d", int16_t((float)(bmsparsed->voltage/100.0f)*(float)bmsparsed->current/100.0f));
@@ -1230,7 +1263,7 @@
             case stopsubscreen_alarms:
                 drawscreen_header(FPSTR(headline_alerts),subscreen,stopsubscreens);
                 sprintf(val1buf,"%03d",alertcounter_escerror);
-                sprintf(val1buf,"%03d",alertcounter_lockedalert);
+                sprintf(val1buf,"%03d",alertcounter_lockedalarm);
                 drawscreen_data(true, 2, false,
                     FPSTR(label_escerrorcounter),&val1buf[0],FPSTR(unit_percent),
                     FPSTR(label_alertcounter),&val2buf[0],FPSTR(unit_percent),
