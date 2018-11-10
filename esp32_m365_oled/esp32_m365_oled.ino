@@ -1,9 +1,10 @@
 /*  ESP32 M365 OLED Display
- * NG Branch
  * see readme.md for details
  *
  * configuration adoptions should be done in definitions.h
- * language adoptions in strings.h (i'm happy to add your strings_<language>.h to my repo)
+ * secrets.h must be created (see readme.md)
+ * boards.h can be created to store your hardware-setup locally and keep it when updates are rolling in (see readme.md)
+ * language adoptions in strings.h - i'm happy to add new languages/translations from you ;)
  *
  * needs patch in esp32-arduino-core/esp32-hal-uart.c (112 byte hardware uart-receive buffer is to big for "realtime" communication)
  *  -> see comments in definitions.h / readme.md and patch yourself or use https://github.com/smartinick/arduino-esp32
@@ -22,7 +23,7 @@
 #include "strings.h"
 #include "wlan.h"
 #include "m365.h"
-//#include "secrets.h"
+
 #ifdef usengcode
   #include "ngcode.h"
 #endif

@@ -2,20 +2,30 @@
 #define DEFINITIONS_h
 
 #include "Arduino.h"
-#include "secrets.h"
 
-#define swversion "18.11.02"
+//see readme.md -> put your wifi/ota passwords there!
+  #include "secrets.h"
 
-#define ng
+//see readme.md -> you can setup your own board.h file to keep your hardware-setup save when upgrading the code
+  //#define dev_ttgo
+  //#define dev_wemos
+  //#define dev_pcb180723_spidual //spi dual screen
+  #define dev_pcb180723_i2csingle //i2c single screen
+  //#define dev_customboard //uncomment to use boards.h
 
-#define M365debugtx GPIO_NUM_25
-#define dev_ttgo
-//#define dev_wemos
-//#define dev_pcb180723
+//define screen language
+  #define LANGUAGE_EN
+  //#define LANGUAGE_FR //translation kindly provided by Technoo' Loggie (Telegram Handle @TechnooLoggie)
+  //#define LANGUAGE_DE
 
+//usually nothing has to be changed below
 
-#ifdef dev_ttgo
+//#define usengcode
+//#include "ngcode.h"
 
+#define swversion "18.11.10"
+
+#if defined dev_ttgo //i2c, single display
   #define usei2c //comment out for SPI
   #define useoled1 //comment out to disable oled functionality
   #define OLED1_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
@@ -24,15 +34,13 @@
   #define oled_reset 16
   #define oled_doreset true
   #define oled1_address 0x3C
-  #ifdef ng
-    #define M365SerialGPIO GPIO_NUM_23 //Wemos board
-  #else
+  #ifndef usengfeatuart
     #define UART2RX GPIO_NUM_23 //PCB v180723
     #define UART2TX GPIO_NUM_22 //PCB v180723
     #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
   #endif
 
-#elif defined(dev_wemos)
+#elif defined(dev_wemos) //i2c, dual display, no rotated displays
   #define usei2c //comment out for SPI
   #define useoled1 //comment out to disable oled functionality
   #define useoled2 //comment out if you use only one display
@@ -44,14 +52,13 @@
   #define oled_doreset false
   #define oled1_address 0x3C
   #define oled2_address 0x3D
-  #ifdef ng
-    #define M365SerialGPIO GPIO_NUM_25 //Wemos board
-  #else
-    #define UART2RX GPIO_NUM_23 //PCB v180723
-    #define UART2TX GPIO_NUM_22 //PCB v180723
-    #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+  #ifndef usengfeatuart
+    #define UART2RX GPIO_NUM_23 //Wemos board
+    #define UART2TX GPIO_NUM_5 //Wemos board
+    #define UART2RXunused GPIO_NUM_19 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
   #endif
-#elif defined(dev_pcb180723)
+
+#elif defined(dev_pcb180723_spidual) //spi, dual displays, display1 is updside down
   //#define usei2c //comment out for SPI
   #define useoled1 //comment out to disable oled functionality
   #define useoled2 //comment out if you use only one display
@@ -65,90 +72,48 @@
   #define OLED1_RESET GPIO_NUM_27
   #define OLED2_CS    GPIO_NUM_14
   #define OLED2_RESET GPIO_NUM_12
-  #define M365SerialGPIO GPIO_NUM_25 //Wemos board
-
-#else
-
-//display config
- 
-  #define usei2c //comment out for SPI
-  #define useoled1 //comment out to disable oled functionality
-  //#define useoled2 //comment out if you use only one display
-  #define OLED1_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
-  #define OLED2_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
-
-
-//pin definitions for i2c display:
-  #if (defined usei2c && defined useoled1) //one display, I2C Mode
-      //#define oled_scl GPIO_NUM_4 //working wemos fake board
-      //#define oled_sda GPIO_NUM_16 //working wemos fake board
-      //#define oled_scl GPIO_NUM_32 //SCLK Pad on PCB
-      //#define oled_sda GPIO_NUM_33 //MOSI Pad on PCB
-    //#define oled_reset -1
-
-    //ttgo dev board
-    #define oled_scl 15
-    #define oled_sda 4
-    #define oled_reset 16
-
-    #define oled1_address 0x3C
-  #endif
-
-
-  #if (defined usei2c && defined useoled2) //2nd display, i2c mode
-      #define oled2_address 0x3D
-  #endif
-
-
-//pin definitions for spi display:
-  #if (!defined usei2c && defined useoled1 && defined ESP32) //one display, ESP32/Hardware SPI Mode
-      #define OLED_MISO   GPIO_NUM_19
-      //this is just a unused GPIO pin - SPI Lib needs a MISO Pin, display off course not :D
-      #define OLED_MOSI   GPIO_NUM_33
-      #define OLED_CLK    GPIO_NUM_32
-      #define OLED_DC     GPIO_NUM_25
-      //OLED1 on OLED1 Connector:
-        #define OLED1_CS    GPIO_NUM_26
-        #define OLED1_RESET GPIO_NUM_27
-      //OLED1 on OLED2 Connector:
-        //#define OLED1_CS    GPIO_NUM_14
-        //#define OLED1_RESET GPIO_NUM_12
-        //#define OLED1_ROTATION 0
-  #endif
-
-  #if (!defined usei2c && defined useoled2 && defined ESP32) //2nd display, ESP32/Hardware SPI Mode
-      #define OLED2_CS    GPIO_NUM_14
-      #define OLED2_RESET GPIO_NUM_12
-  #endif
-
-  #ifdef ng
-    #define M365SerialGPIO GPIO_NUM_23 //Wemos board
-  #else
+  #ifndef usengfeatuart
     #define UART2RX GPIO_NUM_23 //PCB v180723
     #define UART2TX GPIO_NUM_22 //PCB v180723
     #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
   #endif
+#elif defined(dev_pcb180723_i2csingle) //spi, dual displays, display1 is updside down
+  #define usei2c //comment out for SPI
+  #define useoled1 //comment out to disable oled functionality
+  //#define useoled2 //comment out if you use only one display
+  #define OLED1_ROTATION 0 //0 = normal, 1= 90, 2=180, 3=270° CW
+  #define oled_scl GPIO_NUM_32 //SCLK Pad on PCB
+  #define oled_sda GPIO_NUM_33 //MOSI Pad on PCB  
+  #define oled_reset -1
+  #define oled_doreset false
+  #define oled1_address 0x3C
+
+  #ifndef usengfeatuart
+    #define UART2RX GPIO_NUM_23 //PCB v180723
+    #define UART2TX GPIO_NUM_22 //PCB v180723
+    #define UART2RXunused GPIO_NUM_21 //PCB v180723; ESP32 does not support RX or TX only modes - so we remap the rx pin to a unused gpio during sending
+  #endif
+
+#elif defined(dev_customboard)
+  #include "board.h"
 #endif //board define groups
 
-
-//define screen language
-#define LANGUAGE_EN
-//#define LANGUAGE_FR //translation kindly provided by Technoo' Loggie (Telegram Handle @TechnooLoggie)
-//#define LANGUAGE_DE
 
 //Serial UART Setup for Debugging and M365 Connection
   #define DebugSerial Serial //Debuguart = default Serial Port/UART0
   #define M365UARTINDEX 2
   // wemos test board
   
-  #ifdef ng
-    #define M365SerialInit M365Serial.begin(115200,SERIAL_8N1, M365SerialGPIO, -1);
-    #define M365SerialRX switch2RX();
-    #define M365SerialTX switch2TX();
-  #else
+  #ifndef usengfeatuart
+    #define M365SerialInit M365Serial.begin(115200,SERIAL_8N1, UART2RX, UART2TX);
+    #ifdef debuguarttiming
+      #define switch2TX digitalWrite(M365debugtx,HIGH);
+      #define switch2RX digitalWrite(M365debugtx,LOW);
+    #else
+      #define switch2TX
+      #define switch2RX
+    #endif
   #endif  
-
-  //#define Serial1RX M365Serial.begin(115200,SERIAL_8N1, UART2RX, -1)
 
 //M365 - serial connection - regarding a patch in the sdk and general explanations:
   /* ATTENZIONE - the Arduino Serial Library uses HardwareSerial from the arduino-esp32 core which uses "esp32-hal-uart.cpp" driver from esp-idf which runs on RTOS
@@ -197,8 +162,9 @@
   extern unsigned long timestamp_oled2transfer;
   extern unsigned long duration_telnet;
   extern unsigned long timestamp_telnetstart;
+  extern unsigned long timestamp_showsplashscreen;
 
-
+  #define splashscreentimeout 3000 //how long to show splashscreen on power-up
 
 
 
@@ -229,7 +195,7 @@
 
 //advanced settings for debugging
 
-  //#define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
+  #define developermode //"master switch" to remove all useful debug stuff, beside OLED-function only WiFi & OTA will be enabled
     #ifdef developermode
       //detailed config
         #define usetelnetserver

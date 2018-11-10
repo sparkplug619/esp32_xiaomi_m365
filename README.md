@@ -170,6 +170,10 @@ Just be sure to not to use:
 - after creating the file, you have one step to complete (and this step has to be done after each "git pull":  then open definitions.h and comment out all "#define dev_*" lines in the beginning (put // in front of the line). then uncomment,(remove the //) the line "#define dev_customboard"
 - save the 2 files ;)
 
+## ngcode.h/cpp
+ - If it does not compile because there's a missing file, goto definitions.h and remove the 2 lines dealing with "ngcode". In that case i was to lazy or forgot to remove it myself before committing to the repo.
+ - Don't ask about ncode - it's just some test stuff and advanced features that must not be shared with public.
+
 # Support, Questions,...?
  - Telegram Group https://t.me/esp32brain4m365
 
