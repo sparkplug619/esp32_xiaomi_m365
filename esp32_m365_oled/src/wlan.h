@@ -2,17 +2,24 @@
 #define WLAN_h
 
 #include "definitions.h"
-#include "strings.h"
-#include "m365.h"
 
 #include <WiFi.h>
-#include <WiFiUdp.h>
-#include <Update.h> //needed for arduinoOTA on esp32
-#include <ArduinoOTA.h>
+//#include <WiFiUdp.h>
+//#include <Update.h> //needed for arduinoOTA on esp32
+//#include <ArduinoOTA.h>
 
 extern uint8_t currentssidindex;
 extern uint8_t apnumclientsconnected;
 extern uint8_t apnumclientsconnectedlast;
+
+extern const char *apssid;
+extern const char *appassword;
+
+  extern char mac[12];
+  extern unsigned int lastprogress;
+
+extern uint8_t wificore;
+extern uint8_t wifiprio;
 
 extern uint8_t wlanstate;
 extern uint8_t wlanstateold;
@@ -30,5 +37,6 @@ extern unsigned long wlanconnecttimestamp;
 
 void WiFiEvent(WiFiEvent_t event);
 void handle_wlan(void);
+
 
 #endif

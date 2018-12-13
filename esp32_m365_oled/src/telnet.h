@@ -2,10 +2,6 @@
 #define TELNET_h
 
 #include "definitions.h"
-#include "strings.h"
-#include "wlan.h"
-#include <WiFi.h>
-#include <WiFiUdp.h>
 
 #ifdef usetelnetserver
   extern WiFiServer telnetserver;
@@ -31,8 +27,8 @@
   #define telnetdisconnectclients 5
 
   #define userconnecttimeout 300000 //timeout for connecting to telnet/http after wlan connection has been established with ap or client
-  #define telnetrefreshanyscreen 100 //refresh telnet screen every xx ms
-  #define telnetrefreshrawarrayscreen 500 //refresh telnet screen every xx ms
+  #define telnetrefreshanyscreen 500 //refresh telnet screen every xx ms
+  #define telnetrefreshrawarrayscreen 1000 //refresh telnet screen every xx ms
   extern unsigned long userconnecttimestamp;
   extern unsigned long telnetnextrefreshtimestamp;
   

@@ -66,8 +66,10 @@
 	static const char menu_battalertlowvoltage[] PROGMEM = "Batt Low Volt";
 	static const char menu_battalerttemp[] PROGMEM = "Batt Temp Alert";
 	static const char menu_escalerttemp[] PROGMEM = "ESC Temp Alert";
-	static const char menu_espbusmode[] PROGMEM = "ESP Busmode";
-	static const char menu_espwifirestart[] PROGMEM = "ESP Restart Wifi";
+	static const char menu_espbusmode[] PROGMEM = "UART Busmode";
+	static const char menu_espwifirestart[] PROGMEM = "Restart Wifi";
+	static const char menu_espwifionstart[] PROGMEM = "Wifi on Start";
+	
 	static const char menu_m365lock[] PROGMEM = "M365 LOCK";
 	static const char menu_m365unlock[] PROGMEM = "M365 UNLOCK";
 	static const char menu_m365turnoff[] PROGMEM = "M365 Turn OFF";
@@ -82,6 +84,9 @@
 	static const char menu_active[] PROGMEM = "active";
 	static const char menu_passive[] PROGMEM = "passive";
 	static const char menu_beeponalert[] PROGMEM = "Beep on Alert";
+	static const char menu_scooter[] PROGMEM = "Scooter";
+	static const char menu_alerts[] PROGMEM = "Alerts";
+	static const char menu_esp[] PROGMEM = "ESP";
 
 	static const char error_error[] PROGMEM = "ERROR";
 	static const char error_10[] PROGMEM = "BLE Communication";
@@ -201,6 +206,7 @@
 	static const char menu_escalerttemp[] PROGMEM = "ESC Alert Temp";
 	static const char menu_espbusmode[] PROGMEM = "ESP Busmode";
 	static const char menu_espwifirestart[] PROGMEM = "Demarrage Wifi";
+	static const char menu_espwifionstart[] PROGMEM = "Wifi on Start";
 	static const char menu_m365lock[] PROGMEM = "VEROUILLE";
 	static const char menu_m365unlock[] PROGMEM = "DEVEROUILLE";
 	static const char menu_m365turnoff[] PROGMEM = "Eteindre";
@@ -215,6 +221,9 @@
 	static const char menu_active[] PROGMEM = "actif";
 	static const char menu_passive[] PROGMEM = "passif";
 	static const char menu_beeponalert[] PROGMEM = "Bip sur Alert";
+	static const char menu_scooter[] PROGMEM = "Scooter";
+	static const char menu_alerts[] PROGMEM = "Alerts";
+	static const char menu_esp[] PROGMEM = "ESP";
 
 	static const char error_error[] PROGMEM = "ERREUR";
 	static const char error_10[] PROGMEM = "BLE Communication";
@@ -331,8 +340,9 @@
 	static const char menu_battalertlowvoltage[] PROGMEM = "Alarm Spannung";
 	static const char menu_battalerttemp[] PROGMEM = "Alarm Temp Batt";
 	static const char menu_escalerttemp[] PROGMEM = "Alarm Temp Mot";
-	static const char menu_espbusmode[] PROGMEM = "ESP Modus";
-	static const char menu_espwifirestart[] PROGMEM = "ESP Wifi Start";
+	static const char menu_espbusmode[] PROGMEM = "UART Modus";
+	static const char menu_espwifirestart[] PROGMEM = "Wifi Start";
+	static const char menu_espwifionstart[] PROGMEM = "Wifi Auto An";
 	static const char menu_m365lock[] PROGMEM = "SPERREN";
 	static const char menu_m365unlock[] PROGMEM = "ENTSPERREN";
 	static const char menu_m365turnoff[] PROGMEM = "AUSSCHALTEN";
@@ -347,6 +357,9 @@
 	static const char menu_active[] PROGMEM = "aktiv";
 	static const char menu_passive[] PROGMEM = "passiv";
 	static const char menu_beeponalert[] PROGMEM = "Ton bei Alarm";
+	static const char menu_scooter[] PROGMEM = "Scooter";
+	static const char menu_alerts[] PROGMEM = "Alarme";
+	static const char menu_esp[] PROGMEM = "ESP";
 
 	static const char error_error[] PROGMEM = "FEHLER";
 	static const char error_10[] PROGMEM = "BLE Kommunikation";

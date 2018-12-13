@@ -1,4 +1,4 @@
-/*  ESP32 M365 OLED Display
+/*  ESP32 M365
  * see readme.md for details
  *
  * configuration adoptions should be done in definitions.h
@@ -20,16 +20,20 @@
  */
 
 #include "definitions.h"
-#include "display.h"
 #include "config.h"
 #include "strings.h"
 #include "wlan.h"
-#include "m365.h"
-
+#ifdef headunit
+  #include "m365headunit.h"
+#else
+  #include "m365client.h"
+#endif
+#ifdef usedisplay
+  #include "display.h"
+#endif
 #ifdef usengcode
   #include "ngcode.h"
 #endif
-
 #ifdef usetelnetserver
   #include "telnet.h"
 #endif
@@ -40,17 +44,10 @@
   unsigned long ledcurrenttime = 100;
 #endif
 
+//generic temp  vars
   uint8_t i;
   char tmp1[200];
   char tmp2[200];
-  uint16_t tmpi;
-  char chipid[7];
-  char mac[12];
-  unsigned int lastprogress=0;
-
-  const char *apssid = ap_ssid;
-  const char *appassword= ap_password;
-
 
 //timing & statistics
   unsigned long duration_mainloop=0;
@@ -69,6 +66,56 @@
   unsigned long timestamp_telnetstart=0;
   unsigned long timestamp_showsplashscreen=0;
 
+HardwareSerialPatched m365uart(2);
+
+boolean pcflag = true;
+
+#ifdef headunit
+  M365Headunit *ptrm365bus = new M365Headunit();
+#else
+  M365Client *ptrm365bus = new M365Client();
+#endif
+#ifdef usedisplay
+  M365Display *ptrm365d = new M365Display();
+#endif
+
+/*
+//define
+      #define throttlemindefault 40
+      #define throttlemaxdefault 190
+      uint8_t throttlemin = throttlemindefault;
+      uint8_t throttlemax = throttlemaxdefault;
+
+
+//setup:
+  
+
+//loop: if newdata from "x1"
+  from updatestats:
+    1st block
+      if (bleparsed->throttle!=0) {
+        if (throttlemin>bleparsed->throttle) { 
+          throttlemin=bleparsed->throttle; 
+          stopwindowsize = (uint8_t)((throttlemax-throttlemin)/stopsubscreens);
+          chargewindowsize = (uint8_t)((throttlemax-throttlemin)/chargesubscreens);
+          configwindowsize = (uint8_t)((throttlemax-throttlemin)/(configsubscreens-1));
+        }
+        if (throttlemax<bleparsed->throttle) { 
+          throttlemax=bleparsed->throttle;
+          stopwindowsize = (uint8_t)((throttlemax-throttlemin)/stopsubscreens);
+          chargewindowsize = (uint8_t)((throttlemax-throttlemin)/chargesubscreens);
+          configwindowsize = (uint8_t)((throttlemax-throttlemin)/(configsubscreens-1));
+        }
+      }
+    2nd block:
+      if (alert_lockedalarm)
+          alertpopup((char*)"ALARM", (char*)"SCOOTER LOCKED!", popupalertduration);
+      }
+  
+
+
+
+*/
 #ifdef usestatusled
   void handle_led() {
     if (ledontime==0) { 
@@ -99,56 +146,140 @@
         telnetstateold=telnetstate;
       }
     #endif    
-    if (m365receiverstate!=m365receiverstateold) {
-      DebugSerial.printf("### M365RecState: %d -> %d\r\n",m365receiverstateold,m365receiverstate);
-      m365receiverstateold=m365receiverstate;
+    if (ptrm365bus->m365receiverstate!=ptrm365bus->m365receiverstateold) {
+      DebugSerial.printf("### M365RecState: %d -> %d\r\n",ptrm365bus->m365receiverstateold,ptrm365bus->m365receiverstate);
+      ptrm365bus->m365receiverstateold=ptrm365bus->m365receiverstate;
     }
-    if (m365packetstate!=m365packetstateold) {
-      DebugSerial.printf("M365PacketState: %d -> %d\r\n",m365packetstateold,m365packetstate);
-      m365packetstateold=m365packetstate;
+    if (ptrm365bus->m365packetstate!=ptrm365bus->m365packetstateold) {
+      DebugSerial.printf("M365PacketState: %d -> %d\r\n",ptrm365bus->m365packetstateold,ptrm365bus->m365packetstate);
+      ptrm365bus->m365packetstateold=ptrm365bus->m365packetstate;
     }    
   } //print_states
 #endif
 
+void printconfiguration() {
+  DebugSerial.println("Using ESP32 Configuration:");
+  #ifdef usengfeatuart
+    DebugSerial.printf("# UART Mode: IO/1/2: %d/%d/%d\r\n",M365SerialGPIO, M365SerialSpareRX, M365SerialSpareTX);
+  #else
+    DebugSerial.printf("# UART Mode: RX/TX: %d/%d\r\n",UART2RX, UART2TX);
+  #endif
+  #ifdef usedisplay
+    DebugSerial.println("# Display Configuration"); 
+      #ifdef LANGUAGE_EN
+        DebugSerial.println("#  Language: English");
+      #endif
+      #ifdef LANGUAGE_FR
+        DebugSerial.println("#  Language: French");
+      #endif
+      #ifdef LANGUAGE_DE
+        DebugSerial.println("#  Language: German");
+      #endif
+      #ifdef usei2c
+        DebugSerial.printf("#  Mode: I2C, SDA: %d, SCL: %d, Reset: %d, doReset: %d, Clock: %lu\r\n", oled_sda, oled_scl,oled_reset, oled_doreset, oled_clock);
+        #ifdef useoled1
+          DebugSerial.printf("#  display1: Address: 0x%02x, Rotation: %d\r\n", oled1_address, OLED1_ROTATION);
+        #endif
+        #ifdef useoled2
+          DebugSerial.printf("#  display2: Address: 0x%02x, Rotation: %d\r\n", oled2_address, OLED2_ROTATION);
+        #endif
+      #else
+        DebugSerial.printf("#  Mode: SPI, MiSo: %d, MoSi: %d, Clk: %d, DC: %d, Clock: %lu\r\n", OLED_MISO,OLED_MOSI,OLED_CLK,OLED_DC,oled_clock);
+        #ifdef useoled1
+          DebugSerial.printf("#  display1: CS: %d, Rst: %d, Rotation: %d\r\n", OLED1_CS, OLED1_RESET, OLED1_ROTATION);
+        #endif
+        #ifdef useoled2
+          DebugSerial.printf("#  display2: CS: %d, Rst: %d, Rotation: %d\r\n", OLED2_CS, OLED2_RESET, OLED2_ROTATION);
+        #endif
+      #endif
+    DebugSerial.printf("#  Display Core %d, Prio %d\r\n",core_display,prio_display);
+  #else
+    DebugSerial.println("# Display disabled"); 
+  #endif    
+  #ifdef headunit
+    DebugSerial.println("# Controller Config:");
+    DebugSerial.printf("#  UART Core %d, Prio %d\r\n",core_uart,prio_uart);
+    DebugSerial.printf("#  Main Core %d, Prio %d\r\n",xPortGetCoreID(), uxTaskPriorityGet(NULL));
+    DebugSerial.printf("#  WiFi Core %d, Prio %d\r\n",wificore, wifiprio);
+    DebugSerial.printf("#  ADC GPIO: Gas: %d, Throttle %d\r\n", sensor_brake, sensor_throttle);
+    DebugSerial.printf("#  ADC Min: %d, Max %d\r\n", adcmin, adcmax);
+    DebugSerial.printf("#  ESC Min: %d, Max %d\r\n", sensormin, sensormax);
+    #ifdef debuggpio1
+      DebugSerial.printf("#  Debug GPIO1: %d, GPIO2: %d\r\n", debuggpio1, debuggpio2);
+    #endif
+  #else
+    DebugSerial.println("# Controller disabled");
+  #endif
+  #ifdef debuguarttiming
+    DebugSerial.printf("# UART Timing Debug Pin: %d\r\n", M365debugtx);
+  #else
+    DebugSerial.println("# UART Timing Debug disabled");
+  #endif
+  #ifdef usetelnetserver
+    DebugSerial.printf("# TelnetServer @ TCP Port %d\r\n", telnet_port_statistics);
+  #endif
+  #ifdef usepacketserver
+    DebugSerial.printf("# PacketServer @ TCP Port %d\r\n", telnet_port_packet);
+  #endif
+  #ifdef userawserver
+    DebugSerial.printf("# RAWServer @ TCP Port %d\r\n", telnet_port_raw);
+  #endif
+  DebugSerial.println("\r\nUsing M365 Configuration:");
+  printconfig();
+  DebugSerial.println("");
+  DebugSerial.println("\r\nDebug NVS Config:");
+  printnvsconfig();
+  DebugSerial.println("");
+
+
+}
 
 void setup() {
-    init_displays();
+  loadconfig();
+  DebugSerial.begin(115200);
+  m365uart.begin(115200,SERIAL_8N1, UART2RX, UART2TX);
+  #ifdef usedisplay
+    ptrm365d->begin(ptrm365bus);
+  #endif
   #ifdef usengcode
     init_ng();
   #else
-    start_m365();
-    DebugSerial.begin(115200);
-    loadconfig();
-    DebugSerial.println(swversion);
-    #ifdef usestatusled
-      pinMode(led,OUTPUT);
-      digitalWrite(led,LOW);
-    #endif
+    DebugSerial.printf("\r\n\r\n\r\nESP32 M365 %s\r\n",swversion);
   #endif
-  wlanstate=wlanturnstaon;
+  #ifdef usedisplay
+    ptrm365bus->begin(&m365uart, ptrm365d); //start_m365();
+  #else
+    ptrm365bus->begin(&m365uart); //start_m365();
+  #endif
+  #ifdef usestatusled
+    pinMode(led,OUTPUT);
+    digitalWrite(led,LOW);
+  #endif
+  //printconfiguration();
+  if (conf_espwifionstart) {
+    wlanstate=wlanturnstaon;
+  }
+  pcflag = true;
 } //setup
-
 
 
 void loop() {
   timestamp_mainloopstart=micros();
   handle_wlan();
+  if (((wificore!=255) & (pcflag)) | !conf_espwifionstart) {
+    printconfiguration();
+    pcflag = false;
+  }
   #ifdef usetelnetserver
     handle_telnet();
-  #endif  
-  while (M365Serial.available()) { //decode anything we received as long as  there's data in the buffer
-    m365_receiver(); 
-    m365_handlepacket();
-  }
-  if (newdata) {
-    m365_updatestats();
-    handle_housekeeper();
-  }
-  //m365_detectapp(); //detect if smartphone is connected and requests data, so we stay quiet
-  #ifdef useoled1
-    handle_oled();
   #endif
-  ArduinoOTA.handle();
+  #ifdef usengcode
+    loop_ng1();
+  #endif
+  ptrm365bus->loop();
+  #ifdef usedisplay
+    //ptrm365d->loop();
+  #endif
   #ifdef usestatusled
     handle_led();
   #endif
