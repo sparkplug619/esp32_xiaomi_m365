@@ -1,4 +1,6 @@
-﻿# esp32_xiaomi_m365
+attention - last update of this repo - i moved it to gitlab -> https://gitlab.com/esp32m365/esp32_xiaomi_m365_oleddisplay
+
+# esp32_xiaomi_m365
 Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressif ESP32:
 - Supports one or two 0.96" 128x64 SSD1306 based OLED screen(s)
 - Display connectivity via i2c or spi (spi preffered as it's much faster)
