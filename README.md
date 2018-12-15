@@ -1,4 +1,4 @@
-attention - last update of this repo - i moved it to gitlab -> https://gitlab.com/esp32m365/esp32_xiaomi_m365_oleddisplay
+attention - last update of this repo - i moved it to gitlab -> https://gitlab.com/esp32m365/esp32_xiaomi_m365_display
 
 # esp32_xiaomi_m365
 Sample Project for decoding serial bus data on a Xiaomi M365 Scooter on Espressif ESP32:
